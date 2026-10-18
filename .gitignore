@@ -1,0 +1,15 @@
+# Maven
+target/
+# Node / Vite
+node_modules/
+dist/
+.quinoa/
+# IDE
+.idea/
+.vscode/
+*.iml
+# Ambiente local: nunca versionar credencial
+.env
+*.p12
+*.pem
+*.key
