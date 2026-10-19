@@ -118,6 +118,17 @@ class LogHubTest {
     }
 
     @Test
+    void leavingGivesTheSlotBackForTheClientAndTheHub() {
+        var a = hub.open("edge-vps", "docker:vps/a", null, 10, null, false, "c1").subscribe().withSubscriber(AssertSubscriber.create(1));
+        hub.open("edge-vps", "docker:vps/b", null, 10, null, false, "c1").subscribe().withSubscriber(AssertSubscriber.create(1));
+        hub.open("edge-vps", "docker:vps/c", null, 10, null, false, "c2").subscribe().withSubscriber(AssertSubscriber.create(1));
+        a.cancel();
+        // hub cheio (3) e c1 no teto (2) antes do cancel: as duas vagas voltam
+        hub.open("edge-vps", "docker:vps/d", null, 10, null, false, "c1").subscribe().withSubscriber(AssertSubscriber.create(1));
+        assertThrows(LogHub.LimitException.class, () -> hub.open("edge-vps", "docker:vps/e", null, 10, null, false, "c3"));
+    }
+
+    @Test
     void lastSubscriberLeavingClosesTheFollowAfterTheIdleDelay() throws Exception {
         var s = hub.open("edge-vps", "docker:vps/x", null, 10, null, false, "a").subscribe().withSubscriber(AssertSubscriber.create(10));
         String id = opens().get(0).streamId();
