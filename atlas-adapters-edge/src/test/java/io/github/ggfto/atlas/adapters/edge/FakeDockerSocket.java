@@ -18,7 +18,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 final class FakeDockerSocket implements AutoCloseable {
 
-    record Reply(int status, String body, boolean chunked) {
+    /** {@code binary}: corpo em ISO-8859-1 (bytes crus, ex.: logs multiplexados). */
+    record Reply(int status, String body, boolean chunked, boolean binary) {
+        Reply(int status, String body, boolean chunked) {
+            this(status, body, chunked, false);
+        }
     }
 
     final Path socket;
@@ -67,7 +71,7 @@ final class FakeDockerSocket implements AutoCloseable {
             return (head + "Content-Length: " + b.length + "\r\n\r\n" + r.body()).getBytes(StandardCharsets.UTF_8);
         }
         StringBuilder sb = new StringBuilder(head + "Transfer-Encoding: chunked\r\n\r\n");
-        byte[] all = r.body().getBytes(StandardCharsets.UTF_8);
+        byte[] all = r.body().getBytes(r.binary() ? StandardCharsets.ISO_8859_1 : StandardCharsets.UTF_8);
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
         out.writeBytes(sb.toString().getBytes(StandardCharsets.UTF_8));
         for (int i = 0; i < all.length; i += 100) {

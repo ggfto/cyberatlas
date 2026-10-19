@@ -97,6 +97,131 @@ public final class DockerClient {
         return parse(path, all.toByteArray());
     }
 
+    /**
+     * GET em streaming (logs com follow): conecta e le o cabecalho aqui (erro sobe para quem chamou); o corpo
+     * chega em pedacos numa virtual thread ate o fim ou ate o {@link AutoCloseable} ser fechado.
+     */
+    public AutoCloseable stream(String path, java.util.function.Consumer<byte[]> body, Runnable onEnd) throws IOException {
+        if (!allowed(path)) {
+            throw new IllegalArgumentException("endpoint do docker fora da allowlist: " + path);
+        }
+        SocketChannel ch = address instanceof UnixDomainSocketAddress
+                ? SocketChannel.open(StandardProtocolFamily.UNIX) : SocketChannel.open();
+        byte[] rest;
+        boolean chunked;
+        try {
+            ch.connect(address);
+            String req = "GET " + path + " HTTP/1.1\r\nHost: docker\r\nUser-Agent: cyberatlas-edge\r\nConnection: close\r\n\r\n";
+            ch.write(ByteBuffer.wrap(req.getBytes(StandardCharsets.US_ASCII)));
+            ByteArrayOutputStream head = new ByteArrayOutputStream();
+            ByteBuffer buf = ByteBuffer.allocate(8192);
+            int split;
+            byte[] sep = "\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+            while ((split = indexOf(head.toByteArray(), sep, 0)) < 0) {
+                if (ch.read(buf) < 0) {
+                    throw new IOException("docker GET " + path + ": conexao fechada antes do cabecalho");
+                }
+                buf.flip();
+                head.write(buf.array(), 0, buf.limit());
+                buf.clear();
+            }
+            byte[] all = head.toByteArray();
+            String[] lines = new String(all, 0, split, StandardCharsets.US_ASCII).split("\r\n");
+            int code = Integer.parseInt(lines[0].split(" ", 3)[1]);
+            if (code != 200) {
+                throw new IOException("docker GET " + path + ": HTTP " + code);
+            }
+            chunked = java.util.Arrays.stream(lines).anyMatch(h -> h.toLowerCase(Locale.ROOT).startsWith("transfer-encoding:")
+                    && h.toLowerCase(Locale.ROOT).contains("chunked"));
+            rest = java.util.Arrays.copyOfRange(all, split + 4, all.length);
+        } catch (IOException | RuntimeException e) {
+            ch.close();
+            throw e;
+        }
+        java.util.concurrent.atomic.AtomicBoolean closed = new java.util.concurrent.atomic.AtomicBoolean();
+        Thread.ofVirtual().name("docker-logs").start(() -> {
+            ChunkDecoder dec = new ChunkDecoder(chunked, body);
+            try {
+                dec.feed(rest);
+                ByteBuffer b = ByteBuffer.allocate(16 * 1024);
+                while (!dec.done() && ch.read(b) >= 0) {
+                    b.flip();
+                    dec.feed(java.util.Arrays.copyOf(b.array(), b.limit()));
+                    b.clear();
+                }
+            } catch (IOException e) {
+                // fechado por nos (close) ou pela outra ponta: fim do stream
+            } finally {
+                try {
+                    ch.close();
+                } catch (IOException ignored) {
+                    // ja fechado
+                }
+                if (!closed.get()) {
+                    onEnd.run();
+                }
+            }
+        });
+        return () -> {
+            closed.set(true);
+            ch.close();
+        };
+    }
+
+    /** Transfer-Encoding: chunked incremental (ou repasse direto sem chunked). */
+    private static final class ChunkDecoder {
+        private final boolean chunked;
+        private final java.util.function.Consumer<byte[]> out;
+        private final ByteArrayOutputStream line = new ByteArrayOutputStream();
+        private int left = -1;
+        private boolean done;
+
+        ChunkDecoder(boolean chunked, java.util.function.Consumer<byte[]> out) {
+            this.chunked = chunked;
+            this.out = out;
+        }
+
+        boolean done() {
+            return done;
+        }
+
+        void feed(byte[] data) {
+            if (!chunked) {
+                if (data.length > 0) {
+                    out.accept(data);
+                }
+                return;
+            }
+            int i = 0;
+            while (i < data.length && !done) {
+                if (left < 0) {
+                    byte c = data[i++];
+                    if (c == '\n') {
+                        String size = line.toString(StandardCharsets.US_ASCII).trim();
+                        line.reset();
+                        if (size.isEmpty()) {
+                            continue;
+                        }
+                        left = Integer.parseInt(size.split(";")[0], 16);
+                        if (left == 0) {
+                            done = true;
+                        }
+                    } else {
+                        line.write(c);
+                    }
+                } else {
+                    int n = Math.min(left, data.length - i);
+                    out.accept(java.util.Arrays.copyOfRange(data, i, i + n));
+                    i += n;
+                    left -= n;
+                    if (left == 0) {
+                        left = -1;
+                    }
+                }
+            }
+        }
+    }
+
     static String parse(String path, byte[] raw) throws IOException {
         int split = indexOf(raw, "\r\n\r\n".getBytes(StandardCharsets.US_ASCII), 0);
         if (split < 0) {
