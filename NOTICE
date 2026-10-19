@@ -1,0 +1,12 @@
+Cyber Atlas
+Copyright (c) 2026 ggfto. Licenciado sob a MIT (ver LICENSE).
+
+Ideias de desenho reaproveitadas (nenhum codigo copiado):
+
+- Homelable (https://github.com/Pouzor/homelable), MIT License, Copyright (c) Pouzor:
+  separacao entre fato descoberto e apresentacao no canvas, chave sintetica de identidade por fonte,
+  aninhamento por parentId com ordenacao topologica e auto-layout com dagre.
+
+- HiveKeeper (https://github.com/ggfto/HiveKeeper): o padrao do mapa em React Flow com o layout como
+  funcao pura e testada, e o protocolo agente -> gateway (WebSocket de saida, enrollment por token de uso
+  unico com CSR e CN atribuido pelo servidor, mTLS com renovacao, registro por sessao na reconexao).
