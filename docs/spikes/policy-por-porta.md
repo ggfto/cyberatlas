@@ -27,5 +27,9 @@ requisição chegou? Se consegue, o mesmo processo do hub atende duas coisas:
 - **TLS no 8443 é obrigatório de qualquer forma** (WS mTLS dos edges). O login local vai por cima desse TLS, nunca
   em HTTP puro.
 
+- **F2: o DENY pode sair como 401.** Com `quarkus.http.ssl.client-auth=request` (fixo no build, exigido pelo mTLS
+  dos edges) existe um mecanismo de autenticação ativo, e o DENY a uma identidade anônima vira 401 (desafio) em
+  vez de 403. Os dois são negação; os testes aceitam qualquer um deles.
+
 ## Plano B (não necessário)
 Seria um segundo processo/Service só para break-glass. Descartado: o spike mostra que um processo basta.

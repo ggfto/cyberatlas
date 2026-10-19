@@ -37,7 +37,6 @@ public class EdgePkiProfile implements QuarkusTestProfile {
             c.put("quarkus.tls.key-store.pem.0.cert", dir.resolve("server.crt").toString());
             c.put("quarkus.tls.key-store.pem.0.key", dir.resolve("server.key").toString());
             c.put("quarkus.tls.trust-store.pem.certs", dir.resolve("ca.crt").toString());
-            c.put("quarkus.http.ssl.client-auth", "request");
             c.put("quarkus.http.insecure-requests", "enabled");
             c.put("atlas.edges.ca-cert", dir.resolve("ca.crt").toString());
             c.put("atlas.edges.ca-key", dir.resolve("ca.key").toString());

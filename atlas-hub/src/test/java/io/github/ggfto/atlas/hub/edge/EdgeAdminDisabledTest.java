@@ -17,6 +17,8 @@ class EdgeAdminDisabledTest {
     @Test
     void adminAndEnrollmentAreClosedByDefault() {
         given().contentType(ContentType.JSON).body(Map.of("machine", "vps")).when().post("/api/edges").then().statusCode(404);
-        given().contentType(ContentType.JSON).body(Map.of("token", "x", "csr", "x")).when().post("/api/enrollments").then().statusCode(403);
+        // negado pela EdgePortPolicy; com o mecanismo mTLS ativo (client-auth=request) o DENY a anonimo sai 401
+        given().contentType(ContentType.JSON).body(Map.of("token", "x", "csr", "x")).when().post("/api/enrollments").then()
+                .statusCode(org.hamcrest.Matchers.anyOf(org.hamcrest.Matchers.is(401), org.hamcrest.Matchers.is(403)));
     }
 }

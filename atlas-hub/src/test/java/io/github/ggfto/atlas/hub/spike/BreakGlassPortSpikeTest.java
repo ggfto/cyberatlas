@@ -17,7 +17,9 @@ class BreakGlassPortSpikeTest {
 
     @Test
     void publicPortIsDenied() {
-        given().when().get("http://localhost:8081/spike/breakglass").then().statusCode(403);
+        // DENY: 403, ou 401 quando ha mecanismo de autenticacao ativo (mTLS com client-auth=request desde a F2)
+        given().when().get("http://localhost:8081/spike/breakglass").then()
+                .statusCode(org.hamcrest.Matchers.anyOf(org.hamcrest.Matchers.is(401), org.hamcrest.Matchers.is(403)));
     }
 
     @Test

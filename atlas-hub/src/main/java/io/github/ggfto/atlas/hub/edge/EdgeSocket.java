@@ -107,7 +107,12 @@ public class EdgeSocket {
 
     private static void reject(WebSocketConnection c, String reason) {
         LOG.warnf("edge %s recusado: %s", c.userData().get(EDGE_ID), reason);
-        c.sendTextAndAwait(FrameCodec.encode(new Frame.Reject(reason)));
-        c.closeAndAwait();
+        try {
+            c.sendTextAndAwait(FrameCodec.encode(new Frame.Reject(reason)));
+            c.closeAndAwait();
+        } catch (RuntimeException e) {
+            // o edge fecha o socket ao ler o Reject; o close do lado de ca pode chegar num canal ja fechado
+            LOG.debugf("edge %s ja tinha fechado: %s", c.userData().get(EDGE_ID), e.getClass().getSimpleName());
+        }
     }
 }
