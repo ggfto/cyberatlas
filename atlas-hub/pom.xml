@@ -42,6 +42,15 @@
       <groupId>io.quarkus</groupId>
       <artifactId>quarkus-scheduler</artifactId>
     </dependency>
+    <!-- WebSocket dos edges (mTLS na porta 8443) e as permissoes HTTP por porta (spike da F1) -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-websockets-next</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-security</artifactId>
+    </dependency>
     <dependency>
       <groupId>io.quarkiverse.quinoa</groupId>
       <artifactId>quarkus-quinoa</artifactId>
@@ -60,12 +69,6 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter-params</artifactId>
-      <scope>test</scope>
-    </dependency>
-    <!-- spike da F1 (policy por porta); na F5 entra em compile junto com o quarkus-oidc -->
-    <dependency>
-      <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-security</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
