@@ -54,6 +54,8 @@ class KubernetesSourceTest {
                 .endMetadata().withNewSpec().withReplicas(1).endSpec().withNewStatus().withReadyReplicas(1).withReplicas(1).endStatus().build()).create();
         client.apps().deployments().inNamespace("lab").resource(new DeploymentBuilder().withNewMetadata().withNamespace("lab").withName("9router-lab")
                 .endMetadata().withNewSpec().withReplicas(1).endSpec().withNewStatus().withReplicas(1).endStatus().build()).create();
+        client.apps().deployments().inNamespace("lab").resource(new DeploymentBuilder().withNewMetadata().withNamespace("lab").withName("parcial")
+                .endMetadata().withNewSpec().withReplicas(3).endSpec().withNewStatus().withReadyReplicas(1).withReplicas(3).endStatus().build()).create();
         client.apps().replicaSets().inNamespace("dozzle").resource(new ReplicaSetBuilder().withNewMetadata().withNamespace("dozzle").withName("dozzle-7d9")
                 .addNewOwnerReference().withKind("Deployment").withName("dozzle").withApiVersion("apps/v1").withUid("u-d").endOwnerReference()
                 .endMetadata().build()).create();
@@ -83,6 +85,8 @@ class KubernetesSourceTest {
         assertEquals(State.ONLINE, o.get("k8s:host/dozzle/deployment/dozzle").state());
         assertEquals(State.OFFLINE, o.get("k8s:host/lab/deployment/9router-lab").state());
         assertEquals("0/1 prontos", o.get("k8s:host/lab/deployment/9router-lab").reason());
+        assertEquals(State.DEGRADED, o.get("k8s:host/lab/deployment/parcial").state());
+        assertEquals("1/3 prontos", o.get("k8s:host/lab/deployment/parcial").reason());
     }
 
     @Test

@@ -58,6 +58,15 @@ class FrameCodecTest {
     }
 
     @Test
+    void unknownFieldInAKnownFrameIsRefused() {
+        // campo a mais nao e "ignorado em silencio": quem manda campo que o hub nao conhece esta fora do contrato
+        String hello = "{\"type\":\"hello\",\"edgeId\":\"edge-vps\",\"protocolVersion\":1,\"machine\":\"vps\","
+                + "\"capabilities\":[],\"adapterVersions\":{},\"admin\":true}";
+        ProtocolException e = assertThrows(ProtocolException.class, () -> FrameCodec.decode(hello));
+        assertTrue(e.getMessage().contains("admin"), e.getMessage());
+    }
+
+    @Test
     void oversizedFrameIsRefusedBeforeParsing() {
         String big = "{\"type\":\"heartbeat\",\"epochMs\":1,\"pad\":\"" + "x".repeat(FrameCodec.MAX_FRAME_CHARS) + "\"}";
         ProtocolException e = assertThrows(ProtocolException.class, () -> FrameCodec.decode(big));
