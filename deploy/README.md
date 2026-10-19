@@ -7,7 +7,7 @@
 | `pki/gen-pki.sh` | CA do atlas + certificado da 8443, com chaves 600, sem sobrescrever | a pessoa, numa maquina de confianca |
 
 ## Ordem de subida (cada passo e da pessoa)
-1. Imagens publicadas no GHCR por digest (hoje a CI so builda, sem push).
+1. Imagens no GHCR (`ghcr.io/ggfto/cyberatlas-{hub,edge}`, amd64+arm64): a CI publica em push na main (`sha-<curto>`, `main`) e em tag `v*` (semver), nunca `latest`; o digest do manifest list sai no resumo do job `manifest multi-arch`. Fixar por digest.
 2. `deploy/pki/gen-pki.sh ./atlas-pki DNS:atlas-hub.atlas.svc IP:10.99.0.1 IP:172.17.0.1`, selar `atlas-pki`, CA no cofre.
 3. Selar `atlas-secrets` (ver `k8s/vps/_atlas/secret.example.yaml` no infra) e `atlas-db`.
 4. Authentik: blueprint `80-atlas-oidc.yaml` (grupos `atlas-admins`, `atlas-viewers`, provider `atlas`).
