@@ -60,6 +60,18 @@ class SecurityTest {
                 .header("Location", containsString("response_type=code"));
     }
 
+    /** O Authentik so manda o claim groups (papeis) com o scope profile: sem ele, todo login vira 403. */
+    @Test
+    void authorizeRequestAsksForProfileAndEmailScopes() {
+        String location = given().redirects().follow(false).accept(ContentType.HTML).when().get("/").then().statusCode(302)
+                .extract().header("Location");
+        String scope = java.util.Arrays.stream(java.net.URI.create(location).getRawQuery().split("&"))
+                .filter(p -> p.startsWith("scope=")).findFirst().map(p -> p.substring("scope=".length()))
+                .map(v -> java.net.URLDecoder.decode(v, java.nio.charset.StandardCharsets.UTF_8)).orElse("");
+        var scopes = java.util.Set.of(scope.split(" "));
+        assertTrue(scopes.containsAll(java.util.Set.of("openid", "profile", "email")), location);
+    }
+
     @Test
     void viewerSeesTheMapButNotLogsEdgesOrAudit() {
         String v = Tokens.viewer();
