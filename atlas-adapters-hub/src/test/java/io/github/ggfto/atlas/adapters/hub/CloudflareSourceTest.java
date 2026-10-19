@@ -190,4 +190,30 @@ class CloudflareSourceTest {
             assertEquals("cloudflare: mais de " + CloudflareSource.MAX_PAGES + " paginas em dns_records", e.getMessage());
         }
     }
+
+    /** Zona e tuneis vem do services.yml (que pode estar no GitHub): falhar ao le-los e erro da coleta, nao do boot. */
+    @Test
+    void zoneAndTunnelsAreReadAtCollectTimeSoAFailingServicesYmlDoesNotBreakConstruction() throws Exception {
+        try (FakeApi f = new FakeApi(Map.of())) {
+            java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+            CloudflareSource src = new CloudflareSource(f.base(), TOKEN, ACCOUNT, () -> {
+                reads.incrementAndGet();
+                throw new java.io.UncheckedIOException(new java.io.IOException("github fora"));
+            }, Map::of, Duration.ofSeconds(2), CLOCK, Duration.ofSeconds(90));
+            assertEquals(0, reads.get(), "nada e lido no construtor");
+            Exception e = org.junit.jupiter.api.Assertions.assertThrows(Exception.class, src::collect);
+            assertTrue(e.getMessage().contains("github fora"), e.getMessage());
+            assertEquals(0, f.requested.size(), "sem zona nao chama a Cloudflare");
+        }
+    }
+
+    @Test
+    void blankZoneIsAVisibleError() throws Exception {
+        try (FakeApi f = new FakeApi(Map.of())) {
+            CloudflareSource src = new CloudflareSource(f.base(), TOKEN, ACCOUNT, () -> "", Map::of, Duration.ofSeconds(2), CLOCK,
+                    Duration.ofSeconds(90));
+            java.io.IOException e = org.junit.jupiter.api.Assertions.assertThrows(java.io.IOException.class, src::collect);
+            assertTrue(e.getMessage().contains("zona nao definida"), e.getMessage());
+        }
+    }
 }

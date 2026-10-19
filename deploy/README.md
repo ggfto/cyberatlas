@@ -15,5 +15,11 @@
 6. Rota `atlas.gf2.in` no Traefik da VPS; NodePort da 8443 ouvindo no `wg0` (k3s `node-port-addresses`).
 7. Edge: `POST /api/edges` (admin) por maquina, `.env` com o token, `docker compose up -d`; apagar o token do `.env`.
 
+## services.yml
+O hub le o `services.yml` de cada maquina direto do `ggfto/infra` pela API de contents do GitHub
+(`atlas.servicesyml.github.*`: repo, ref `stable`, paths por maquina), com um token fine-grained so
+`contents:read` daquele repo (`ATLAS_SERVICESYML_GITHUB_TOKEN`, no Secret). ETag/304 a cada coleta; erro (404 de
+repo privado, 401, rate limit) aparece em `GET /api/sources` e o resto do mapa segue.
+
 ## Sem segredo aqui
 Nenhum arquivo deste diretorio tem valor sensivel. Segredos so como SealedSecret no infra, selados pela pessoa.

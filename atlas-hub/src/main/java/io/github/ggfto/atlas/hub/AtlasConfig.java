@@ -119,9 +119,34 @@ public interface AtlasConfig {
         Duration every();
     }
 
+    /** De onde vem o services.yml de cada maquina: arquivo local ou GitHub (nunca os dois para a mesma maquina). */
     interface ServicesYml {
-        /** maquina -> caminho do services.yml. Na F1 so arquivo local (fixture); GitHub contents:read entra com o token. */
+        /** maquina -> arquivo local (fixture, dev). */
         Map<String, String> files();
+
+        Github github();
+
+        /** GitHub contents:read (design §1.3): o services.yml versionado no ggfto/infra, sem copia no deploy. */
+        interface Github {
+            @WithDefault("https://api.github.com")
+            String api();
+
+            /** dono/nome, ex.: ggfto/infra. Obrigatorio se houver paths. */
+            Optional<String> repo();
+
+            /** Branch, tag ou commit lido; stable = o que o Argo e o config-sync aplicam. */
+            @WithDefault("stable")
+            String ref();
+
+            /** Token fine-grained so contents:read do repo (Secret); vazio = repo publico. */
+            Optional<String> token();
+
+            /** maquina -> caminho no repo, ex.: vps=vps/services.yml. */
+            Map<String, String> paths();
+
+            @WithDefault("10s")
+            Duration timeout();
+        }
     }
 
     interface Checks {

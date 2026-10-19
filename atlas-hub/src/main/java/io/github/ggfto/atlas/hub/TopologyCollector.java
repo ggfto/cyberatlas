@@ -60,6 +60,10 @@ public final class TopologyCollector {
         return TopologyMerger.merge(List.copyOf(last.values()), Sanitizer.DEFAULT, now);
     }
 
+    public List<String> sourceNames() {
+        return sources.stream().map(TopologySource::name).toList();
+    }
+
     public Map<String, String> lastErrors() {
         return Map.copyOf(errors);
     }
