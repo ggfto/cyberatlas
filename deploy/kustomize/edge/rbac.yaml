@@ -1,0 +1,34 @@
+# SA do edge e o papel SO LEITURA do que o KubernetesSource/KubernetesLogSource pedem: listar pods e os donos
+# (deployments, replicasets, statefulsets, daemonsets) em todos os namespaces e ler o log de um pod. Nada de
+# secrets, configmaps, exec, nem verbo de escrita. "watch" nao e usado hoje (so list), fica para os informers.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: atlas-edge
+# o token so entra no container do edge (volume projetado no deployment.yaml), nunca no socket-proxy
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: atlas-edge-read
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: atlas-edge-read
+subjects:
+  - kind: ServiceAccount
+    name: atlas-edge
+    namespace: atlas-edge
+roleRef:
+  kind: ClusterRole
+  name: atlas-edge-read
+  apiGroup: rbac.authorization.k8s.io

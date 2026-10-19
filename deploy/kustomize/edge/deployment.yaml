@@ -1,0 +1,109 @@
+# atlas edge no k3s da maquina (design §5, revisto: antes era compose fora do k3s). Dois containers num pod:
+#   - edge: le o k3s pela SA (in-cluster, sem kubeconfig) e o Docker pelo socket-proxy em 127.0.0.1:2375;
+#   - socket-proxy: unico com o docker.sock (hostPath, so leitura), allowlist so de GET, igual a do compose.
+# O que se perde em relacao ao compose (rede Docker interna so com o edge e o proxy, sem saida):
+#   - o proxy divide a rede do pod com o edge: escuta so no loopback do pod, mas a saida dele passa a ser a
+#     da NetworkPolicy do pod (DNS, hub, apiserver) em vez de nenhuma;
+#   - supplementalGroups e do pod: o edge tambem fica no grupo docker (sem o socket montado, nao serve de nada);
+#   - hostPath exige namespace sem Pod Security "baseline/restricted" (o k3s nao aplica PSA por padrao);
+#   - se o k3s cair, o edge cai junto e o mapa mostra "edge sem conexao" em vez do Docker da maquina.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-edge
+  labels: {app: atlas-edge}
+spec:
+  replicas: 1
+  # PVC ReadWriteOnce e uma credencial so: nunca dois edges ao mesmo tempo.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: atlas-edge}
+  template:
+    metadata:
+      labels: {app: atlas-edge}
+    spec:
+      serviceAccountName: atlas-edge
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+        # GID do grupo docker da maquina (getent group docker): o overlay troca. 65534 = nogroup, ou seja, sem o
+        # patch o proxy nao abre o socket e o watchdog dele derruba o container (falha visivel).
+        supplementalGroups: [65534]
+      containers:
+        - name: edge
+          # tag sha-966c905 (manifest list amd64+arm64, publico); trocar e um commit revisado
+          image: ghcr.io/ggfto/cyberatlas-edge@sha256:9046b8e8c19985a0957ff6c9c911a38e5173f82a30338ace99f290e5ed8b4c51
+          envFrom:
+            # ATLAS_EDGE_MACHINE e ATLAS_EDGE_HUB, do overlay
+            - configMapRef: {name: atlas-edge-env}
+          env:
+            - {name: ATLAS_EDGE_CA_FILE, value: /etc/atlas/ca.crt}
+            - {name: ATLAS_EDGE_DOCKER, value: "tcp://127.0.0.1:2375"}
+            - {name: ATLAS_EDGE_KUBERNETES, value: "true"}
+            # So no primeiro start (sem credencial no PVC). Secret criado a mao pelo enroll.sh e apagado depois;
+            # nao esta no git nem no Argo. Ausente = o edge sobe com a credencial do PVC.
+            - name: ATLAS_EDGE_TOKEN
+              valueFrom:
+                secretKeyRef: {name: atlas-edge-enroll, key: ATLAS_EDGE_TOKEN, optional: true}
+          securityContext:
+            runAsUser: 1001
+            runAsGroup: 1001
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 25m, memory: 64Mi}
+            limits: {memory: 192Mi}
+          volumeMounts:
+            - {name: state, mountPath: /var/lib/atlas-edge}
+            - {name: ca, mountPath: /etc/atlas, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+            - {name: sa-token, mountPath: /var/run/secrets/kubernetes.io/serviceaccount, readOnly: true}
+        - name: socket-proxy
+          image: docker.io/wollomatic/socket-proxy:1.13.1@sha256:3935b709275e4ec35d6ed5a5c4a1f0d01ed31eec5e7234efc3357ecd47689002
+          args:
+            - '-loglevel=info'
+            # so o loopback do pod: so o edge (mesmo pod) alcanca
+            - '-listenip=127.0.0.1'
+            - '-allowfrom=127.0.0.1/32'
+            # MESMA allowlist do deploy/compose/edge e do DockerClient: listagem, eventos, logs. Sem inspect.
+            - '-allowGET=^/(v1\.[0-9]{1,2}/)?(containers/json|events|containers/[a-f0-9]{12,64}/logs)$'
+            - '-watchdoginterval=600'
+            - '-stoponwatchdog'
+          securityContext:
+            runAsUser: 65534
+            runAsGroup: 65534
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 10m, memory: 16Mi}
+            limits: {memory: 32Mi}
+          volumeMounts:
+            - {name: docker-sock, mountPath: /var/run/docker.sock, readOnly: true}
+      volumes:
+        - name: state
+          persistentVolumeClaim: {claimName: atlas-edge-state}
+        - name: ca
+          configMap:
+            name: atlas-edge-ca
+            items: [{key: ca.crt, path: ca.crt}]
+        - name: tmp
+          emptyDir: {sizeLimit: 16Mi}
+        - name: docker-sock
+          hostPath: {path: /var/run/docker.sock, type: Socket}
+        # o que o automount poria (3607 s, o mesmo prazo do automount), mas so no container do edge
+        - name: sa-token
+          projected:
+            sources:
+              - serviceAccountToken: {path: token, expirationSeconds: 3607}
+              - configMap:
+                  name: kube-root-ca.crt
+                  items: [{key: ca.crt, path: ca.crt}]
+              - downwardAPI:
+                  items:
+                    - path: namespace
+                      fieldRef: {fieldPath: metadata.namespace}

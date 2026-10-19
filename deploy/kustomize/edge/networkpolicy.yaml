@@ -1,0 +1,27 @@
+# Entrada: nenhuma (o edge so disca para fora; o HTTP de saude escuta so no loopback do pod).
+# Saida (esta base): DNS e o Service kubernetes (10.43.0.1:443, padrao do k3s). O overlay soma, numa segunda
+# policy (policies se somam), o hub e o IP do no na 6443: o Service kubernetes vira DNAT para <ip-do-no>:6443
+# antes do filtro, entao a regra que de fato casa e a do IP do no; a de 10.43.0.1 fica por garantia.
+# Vale tambem para o socket-proxy (mesmo pod, mesma rede): ele nao tem saida alem destas.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlas-edge
+spec:
+  podSelector:
+    matchLabels: {app: atlas-edge}
+  policyTypes: [Ingress, Egress]
+  ingress: []
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: kube-system}
+          podSelector:
+            matchLabels: {k8s-app: kube-dns}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - ipBlock: {cidr: 10.43.0.1/32}
+      ports:
+        - {port: 443, protocol: TCP}

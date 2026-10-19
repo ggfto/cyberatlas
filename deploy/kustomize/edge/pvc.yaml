@@ -1,0 +1,11 @@
+# Estado do edge (edge.key 0600, edge.crt, ca.crt do enrollment). Perder = re-enrollment.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: atlas-edge-state
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: local-path
+  resources:
+    requests:
+      storage: 16Mi
