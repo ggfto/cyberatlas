@@ -3,6 +3,7 @@ name: ci
 on:
   push:
     branches: ["**"]
+    tags: ["v*"]
   pull_request:
 
 permissions:
@@ -10,7 +11,15 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # main e tags v* publicam: nao cancelar no meio do push (deixaria digest orfao sem manifest)
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/v') }}
+
+# Publicacao (so push em main e tags v*; PR e outros branches buildam e nunca publicam):
+#   native (sem permissao de escrita) -> binarios como artifact
+#   -> publicar <arch> (packages: write): imagem de cada arquitetura empurrada SO por digest, sem tag
+#   -> manifest (packages: write): junta os digests numa manifest list multi-arch e aplica as tags
+env:
+  PUBLICAR: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')) }}
 
 jobs:
   jvm:
@@ -49,6 +58,17 @@ jobs:
       # native-image roda no container do builder Mandrel da propria arquitetura (sem cross-compile);
       # os @QuarkusIntegrationTest rodam contra o binario nativo gerado
       - run: mvn -B verify -Pnative
+      # so quando publica: os binarios nativos seguem para o job de publicacao da mesma arquitetura
+      - name: binarios nativos (artifact)
+        if: env.PUBLICAR == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: nativo-${{ matrix.arch }}
+          path: |
+            atlas-hub/target/*-runner
+            atlas-edge/target/*-runner
+          if-no-files-found: error
+          retention-days: 1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       # imagens SEM push: so prova que o binario nativo empacota na base micro desta arquitetura
       - name: imagem cyberatlas-hub (sem push)
@@ -67,3 +87,146 @@ jobs:
           platforms: linux/${{ matrix.arch }}
           push: false
           tags: ghcr.io/ggfto/cyberatlas-edge:ci-${{ matrix.arch }}
+
+  publicar:
+    name: publicar ${{ matrix.arch }}
+    needs: [jvm, native]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: nativo-${{ matrix.arch }}
+          path: .
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # push por digest (sem tag): a tag so nasce no manifest list, depois que as duas arquiteturas subiram
+      - name: imagem cyberatlas-hub (push por digest)
+        id: hub
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: atlas-hub
+          file: atlas-hub/src/main/docker/Dockerfile.native-micro
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.title=cyberatlas-hub
+            org.opencontainers.image.source=https://github.com/ggfto/cyberatlas
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=ghcr.io/ggfto/cyberatlas-hub,push-by-digest=true,name-canonical=true,push=true
+      - name: imagem cyberatlas-edge (push por digest)
+        id: edge
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: atlas-edge
+          file: atlas-edge/src/main/docker/Dockerfile.native-micro
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.title=cyberatlas-edge
+            org.opencontainers.image.source=https://github.com/ggfto/cyberatlas
+            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,name=ghcr.io/ggfto/cyberatlas-edge,push-by-digest=true,name-canonical=true,push=true
+      - name: exporta digests
+        env:
+          HUB_DIGEST: ${{ steps.hub.outputs.digest }}
+          EDGE_DIGEST: ${{ steps.edge.outputs.digest }}
+        run: |
+          set -eu
+          mkdir -p digests/cyberatlas-hub digests/cyberatlas-edge
+          touch "digests/cyberatlas-hub/${HUB_DIGEST#sha256:}"
+          touch "digests/cyberatlas-edge/${EDGE_DIGEST#sha256:}"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ matrix.arch }}
+          path: digests/
+          if-no-files-found: error
+          retention-days: 1
+
+  manifest:
+    name: manifest multi-arch
+    needs: publicar
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: digests-*
+          path: digests
+          merge-multiple: true
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # main: sha-<curto> + main. tag v*: semver (X.Y.Z e X.Y). Nunca latest: o deploy fixa por digest.
+      - name: tags
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: placeholder
+          flavor: latest=false
+          tags: |
+            type=sha,prefix=sha-,format=short,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      - name: cria manifest lists e resume digests
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Imagens publicadas"
+            echo
+            echo "Fixe o deploy pelo digest (kustomize \`images[].digest\` / \`ATLAS_EDGE_IMAGE\` do compose)."
+            echo
+            echo "| imagem | digest do manifest list | tags |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for img in cyberatlas-hub cyberatlas-edge; do
+            repo="ghcr.io/ggfto/${img}"
+            n=$(find "digests/${img}" -type f | wc -l)
+            if [ "$n" -ne 2 ]; then echo "::error::${img}: esperava 2 digests (amd64+arm64), achei ${n}"; exit 1; fi
+            tag_args=()
+            tags_txt=""
+            while IFS= read -r t; do
+              [ -n "$t" ] || continue
+              tag_args+=(-t "${repo}:${t#placeholder:}")
+              tags_txt+="\`${t#placeholder:}\` "
+            done <<< "$TAGS"
+            if [ "${#tag_args[@]}" -eq 0 ]; then echo "::error::nenhuma tag gerada"; exit 1; fi
+            src=()
+            for d in "digests/${img}"/*; do src+=("${repo}@sha256:$(basename "$d")"); done
+            docker buildx imagetools create "${tag_args[@]}" \
+              --annotation "index:org.opencontainers.image.source=https://github.com/ggfto/cyberatlas" \
+              --annotation "index:org.opencontainers.image.licenses=MIT" \
+              --annotation "index:org.opencontainers.image.revision=${GITHUB_SHA}" \
+              "${src[@]}"
+            first_tag="${tag_args[1]}"
+            digest=$(docker buildx imagetools inspect "$first_tag" --format '{{json .Manifest}}' | jq -r .digest)
+            docker buildx imagetools inspect "$first_tag"
+            echo "| \`${repo}\` | \`${digest}\` | ${tags_txt}|" >> "$GITHUB_STEP_SUMMARY"
+            echo "${img}=${repo}@${digest}"
+          done
