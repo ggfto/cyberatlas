@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm:
+    name: testes JVM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # unitarios + Vitest do atlas-web (via Quinoa) + @QuarkusIntegrationTest contra os jars
+      - run: mvn -B verify -DskipITs=false
+
+  native:
+    name: nativo ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      # native-image roda no container do builder Mandrel da propria arquitetura (sem cross-compile);
+      # os @QuarkusIntegrationTest rodam contra o binario nativo gerado
+      - run: mvn -B verify -Pnative
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      # imagens SEM push: so prova que o binario nativo empacota na base micro desta arquitetura
+      - name: imagem cyberatlas-hub (sem push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: atlas-hub
+          file: atlas-hub/src/main/docker/Dockerfile.native-micro
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          tags: ghcr.io/ggfto/cyberatlas-hub:ci-${{ matrix.arch }}
+      - name: imagem cyberatlas-edge (sem push)
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: atlas-edge
+          file: atlas-edge/src/main/docker/Dockerfile.native-micro
+          platforms: linux/${{ matrix.arch }}
+          push: false
+          tags: ghcr.io/ggfto/cyberatlas-edge:ci-${{ matrix.arch }}

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.ggfto.atlas</groupId>
+    <artifactId>atlas-parent</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+  </parent>
+
+  <artifactId>atlas-hub</artifactId>
+  <name>atlas-hub</name>
+  <description>Hub: API, SSE para o browser, WebSocket dos edges, adapters globais; serve o atlas-web.</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.ggfto.atlas</groupId>
+      <artifactId>atlas-core</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.ggfto.atlas</groupId>
+      <artifactId>atlas-protocol</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.github.ggfto.atlas</groupId>
+      <artifactId>atlas-adapters-hub</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-arc</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-smallrye-health</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-rest</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.quinoa</groupId>
+      <artifactId>quarkus-quinoa</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-junit5</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkiverse.quinoa</groupId>
+      <artifactId>quarkus-quinoa-testing</artifactId>
+      <version>${quarkus-quinoa.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.rest-assured</groupId>
+      <artifactId>rest-assured</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>${quarkus.platform.group-id}</groupId>
+        <artifactId>quarkus-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <configuration>
+          <skipITs>${skipITs}</skipITs>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>
