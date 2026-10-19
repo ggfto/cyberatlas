@@ -138,9 +138,25 @@ class CloudflareSourceTest {
     @Test
     void successFalseWithHttp200IsAnErrorToo() throws Exception {
         Map<String, FakeApi.Reply> m = api();
-        m.put("/client/v4/zones?name=gf2.in", new FakeApi.Reply(200, "{\"success\":false,\"errors\":[{\"code\":1000,\"message\":\"x\"}]}"));
+        // result valido junto: so o success=false decide
+        m.put("/client/v4/zones?name=gf2.in", new FakeApi.Reply(200, "{\"success\":false,\"errors\":[{\"code\":1000,\"message\":\"x\"}],"
+                + "\"result\":[{\"id\":\"" + ZONE_ID + "\",\"name\":\"gf2.in\"}]}"));
         try (FakeApi f = new FakeApi(m)) {
-            assertThrows(IOException.class, () -> source(f).collect());
+            assertEquals("cloudflare GET /client/v4/zones: HTTP 200 (1000 x)",
+                    assertThrows(IOException.class, () -> source(f).collect()).getMessage());
+        }
+    }
+
+    @Test
+    void errorMessageMasksZoneAndAccountIds() throws Exception {
+        // a mensagem vai para log e para o lastErrors do coletor: ids de zona/conta/tunel nunca
+        Map<String, FakeApi.Reply> m = api();
+        m.put("/client/v4/zones/" + ZONE_ID + "/dns_records?page=1&per_page=100", new FakeApi.Reply(500,
+                "{\"success\":false,\"errors\":[{\"code\":10000,\"message\":\"falha\"}]}"));
+        try (FakeApi f = new FakeApi(m)) {
+            IOException e = assertThrows(IOException.class, () -> source(f).collect());
+            assertEquals("cloudflare GET /client/v4/zones/{id}/dns_records: HTTP 500 (10000 falha)", e.getMessage());
+            assertFalse(e.getMessage().contains(ZONE_ID));
         }
     }
 

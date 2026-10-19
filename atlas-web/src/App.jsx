@@ -38,7 +38,7 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
-      <MriPageHeader title="Cyber Atlas" icon={Network} />
+      <MriPageHeader title="Cyber Atlas" icon={Network} count={snapshot.nodes?.length ?? 0} countLabel="nós" />
       {error && <div className="text-sm text-red-500">Nao foi possivel carregar o mapa ({error}).</div>}
       <InfraMap nodes={graph.nodes} edges={graph.edges} />
     </div>
