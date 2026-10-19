@@ -155,5 +155,22 @@
         <quarkus.native.container-build>true</quarkus.native.container-build>
       </properties>
     </profile>
+    <!-- amd64: o default do GraalVM e -march=x86-64-v3 (exige AVX/AVX2/BMI/FMA) e o binario morre na
+         partida em CPU sem AVX (ex.: Celeron N5095/Jasper Lake). x86-64-v2 (SSE4.2+POPCNT) cobre essas
+         CPUs. Ativado pela arquitetura do host (o builder Mandrel roda na mesma arquitetura, sem
+         cross-compile): no aarch64 o profile nao entra e fica o default do GraalVM (armv8-a), ja que
+         x86-64-v2 nem e um valor valido de -march la. Vale para hub e edge (propriedade do pai).
+         Regressao: .github/scripts/cpu-sem-avx.sh no job nativo amd64 do CI. -->
+    <profile>
+      <id>native-march-amd64</id>
+      <activation>
+        <os>
+          <arch>amd64</arch>
+        </os>
+      </activation>
+      <properties>
+        <quarkus.native.march>x86-64-v2</quarkus.native.march>
+      </properties>
+    </profile>
   </profiles>
 </project>
