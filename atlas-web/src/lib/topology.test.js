@@ -123,5 +123,15 @@ describe('buildInfraTopology', () => {
     expect(g['group:vps'].style.width).toBe(COL.workload + 220 + 32)
     expect(graph.edges.some((x) => x.target === 'docker:vps/dozzle')).toBe(true)
   })
-})
 
+  it('servico que roda direto na maquina (RUNS_ON -> machine:) sai marcado como processo do host, os outros nao', () => {
+    const snap = {
+      nodes: [...SNAPSHOT.nodes, n('service:host/clink', 'SERVICE', 'host', 'clink')],
+      edges: [...SNAPSHOT.edges, e('service:host/clink', 'machine:host', 'RUNS_ON')],
+    }
+    const g = byId(buildInfraTopology(snap))
+    expect(g['service:host/clink'].data.hostProcess).toBe(true)
+    expect(g['service:host/clink'].hostProcess).toBeUndefined()
+    expect(g['service:vps/dozzle'].data.hostProcess).toBeUndefined()
+  })
+})

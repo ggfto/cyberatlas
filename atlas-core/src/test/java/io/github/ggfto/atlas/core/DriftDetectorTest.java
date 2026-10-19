@@ -104,4 +104,30 @@ class DriftDetectorTest {
                 List.of(Edge.of("argo:a", "k8s:vps/n/deployment/w", EdgeKind.MANAGES), Edge.of("argo:a", "k8s:vps/n/deployment/w", EdgeKind.MANAGES)));
         assertEquals(List.of("imagem-flutuante", "outofsync"), d.get("k8s:vps/n/deployment/w"));
     }
+
+    @Test
+    void backendContainerInexistenteSoComODockerDaMaquinaPresente() {
+        TopologyNode dozzle = tn("service:vps/dozzle", NodeKind.SERVICE, Map.of("backend", "http://dozzle-dozzle-1:8080"));
+        TopologyNode portainer = tn("service:vps/portainer", NodeKind.SERVICE, Map.of("backend", "http://portainer:9000"));
+        TopologyNode externo = tn("service:vps/ext", NodeKind.SERVICE, Map.of("backend", "https://api.example.com"));
+        TopologyNode ctr = tn("docker:vps/portainer", NodeKind.CONTAINER, Map.of("image", "x@sha256:1"));
+        List<Edge> e = List.of(Edge.of("service:vps/portainer", "docker:vps/portainer", EdgeKind.ROUTES_TO));
+        Map<String, List<String>> d = drift(List.of(dozzle, portainer, externo, ctr), e);
+        assertEquals(List.of("backend-container-inexistente"), d.get("service:vps/dozzle"));
+        assertEquals(List.of(), d.get("service:vps/portainer"));
+        assertEquals(List.of(), d.get("service:vps/ext"), "FQDN externo nao e nome de container");
+        assertEquals(List.of(), drift(List.of(dozzle), List.of()).get("service:vps/dozzle"), "sem Docker da maquina, sem opiniao");
+    }
+
+    @Test
+    void backendNodePortInexistenteSoComNodePortsDaMaquinaPresentes() {
+        TopologyNode atlas = tn("service:vps/atlas", NodeKind.SERVICE, Map.of("backend", "http://host.docker.internal:30091"));
+        TopologyNode clink = tn("service:vps/clink", NodeKind.SERVICE, Map.of("backend", "http://host.docker.internal:5000"));
+        TopologyNode hub = tn("k8s:vps/atlas/deployment/atlas-hub", NodeKind.WORKLOAD, Map.of("namespace", "atlas", "nodeports", "30090",
+                "image", "x@sha256:1"));
+        Map<String, List<String>> d = drift(List.of(atlas, clink, hub), List.of());
+        assertEquals(List.of("backend-nodeport-inexistente"), d.get("service:vps/atlas"));
+        assertEquals(List.of(), d.get("service:vps/clink"), "fora da faixa de NodePort e processo do host");
+        assertEquals(List.of(), drift(List.of(atlas), List.of()).get("service:vps/atlas"), "edge sem Services (RBAC antigo): sem opiniao");
+    }
 }

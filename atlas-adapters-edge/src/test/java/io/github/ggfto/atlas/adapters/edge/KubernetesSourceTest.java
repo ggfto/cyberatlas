@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.fabric8.kubernetes.api.model.ContainerStatusBuilder;
 import io.fabric8.kubernetes.api.model.Pod;
 import io.fabric8.kubernetes.api.model.PodBuilder;
+import io.fabric8.kubernetes.api.model.ServiceBuilder;
 import io.fabric8.kubernetes.api.model.apps.DeploymentBuilder;
 import io.fabric8.kubernetes.api.model.apps.ReplicaSetBuilder;
 import io.fabric8.kubernetes.client.KubernetesClient;
@@ -101,5 +102,28 @@ class KubernetesSourceTest {
         assertEquals(Map.of("namespace", "dozzle", "phase", "Running", "ready", "1/1", "restarts", "0",
                 "owner", "Deployment/dozzle", "image", "ghcr.io/x/app:1"), p.attributes());
         assertFalse(f.toString().contains("segredo"), "env/annotation nunca entram");
+    }
+
+    @Test
+    void nodePortDoServiceViraAtributoDosPodsDoSelectorEDoWorkloadDono() throws Exception {
+        Pod labeled = new PodBuilder(pod("dozzle", "dozzle-7d9-xyz", "Running", true, 0, null, "dozzle-7d9"))
+                .editMetadata().addToLabels("app", "dozzle").addToLabels("pod-template-hash", "7d9").endMetadata().build();
+        client.pods().inNamespace("dozzle").resource(labeled).create();
+        client.services().inNamespace("dozzle").resource(new ServiceBuilder().withNewMetadata().withNamespace("dozzle").withName("dozzle")
+                .endMetadata().withNewSpec().withType("NodePort").addToSelector("app", "dozzle")
+                .addNewPort().withPort(8080).withNodePort(30082).endPort().endSpec().build()).create();
+        // ClusterIP (sem nodePort) e Service de outro namespace com o mesmo selector nao contam
+        client.services().inNamespace("dozzle").resource(new ServiceBuilder().withNewMetadata().withNamespace("dozzle").withName("interno")
+                .endMetadata().withNewSpec().withType("ClusterIP").addToSelector("app", "dozzle").addNewPort().withPort(80).endPort()
+                .endSpec().build()).create();
+        client.services().inNamespace("lab").resource(new ServiceBuilder().withNewMetadata().withNamespace("lab").withName("outro")
+                .endMetadata().withNewSpec().withType("NodePort").addToSelector("app", "dozzle")
+                .addNewPort().withPort(80).withNodePort(30999).endPort().endSpec().build()).create();
+        Map<String, Node> n = collect().nodes().stream().collect(Collectors.toMap(Node::key, x -> x));
+        assertEquals("30082", n.get("k8s:host/dozzle/pod/dozzle-7d9-xyz").attributes().get("nodeports"));
+        assertEquals("30082", n.get("k8s:host/dozzle/deployment/dozzle").attributes().get("nodeports"));
+        assertFalse(n.get("k8s:host/dozzle/pod/dozzle-7d9-abc").attributes().containsKey("nodeports"), "sem label, fora do selector");
+        assertFalse(n.get("k8s:host/lab/deployment/9router-lab").attributes().containsKey("nodeports"));
+        assertFalse(collect().toString().contains("pod-template-hash"), "labels nao saem do edge");
     }
 }

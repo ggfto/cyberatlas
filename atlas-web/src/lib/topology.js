@@ -27,7 +27,7 @@ export function stateOf(status) {
   return (status?.state || 'UNKNOWN').toLowerCase()
 }
 
-function card(tn, position, extra = {}) {
+function card(tn, position, { hostProcess, ...extra } = {}) {
   const { node, status } = tn
   return {
     id: node.key,
@@ -42,6 +42,7 @@ function card(tn, position, extra = {}) {
       state: stateOf(status),
       reason: status?.reason || '',
       drift: tn.drift || [],
+      ...(hostProcess ? { hostProcess: true } : {}),
     },
   }
 }
@@ -56,6 +57,8 @@ export function buildInfraTopology(snapshot) {
   const machines = [...new Set(items.filter((t) => t.node.kind === 'MACHINE').map((t) => t.node.machine))].sort()
   const firstRouteOf = new Map()
   const serviceOf = new Map() // container/pod -> servico que roteia para ele (Correlator)
+  // servico que roda direto na maquina (RUNS_ON -> machine:, Correlator): nem Docker nem k8s, processo do host
+  const hostProcess = new Set(rawEdges.filter((e) => e.kind === 'RUNS_ON' && e.from.startsWith('service:') && e.to.startsWith('machine:')).map((e) => e.from))
   for (const e of rawEdges) {
     if (e.kind === 'ROUTES_TO' && e.to.startsWith('service:') && !firstRouteOf.has(e.to)) firstRouteOf.set(e.to, e.from)
     if (e.kind === 'ROUTES_TO' && e.from.startsWith('service:') && !serviceOf.has(e.to)) serviceOf.set(e.to, e.from)
@@ -89,7 +92,9 @@ export function buildInfraTopology(snapshot) {
     of('ENTRY').forEach((t, i) => children.push(card(t, at('entry', i), inGroup)))
     of('TRAEFIK').forEach((t) => children.push(card(t, at('traefik', (rows - 1) / 2), inGroup)))
     routes.forEach((t, i) => children.push(card(t, at('route', i), inGroup)))
-    of('SERVICE').forEach((t) => children.push(card(t, at('service', serviceRow.get(t.node.key)), inGroup)))
+    of('SERVICE').forEach((t) =>
+      children.push(card(t, at('service', serviceRow.get(t.node.key)), { ...inGroup, hostProcess: hostProcess.has(t.node.key) })),
+    )
     workloads
       .filter((t) => !loose.includes(t))
       .forEach((t) => children.push(card(t, at('workload', serviceRow.get(serviceOf.get(t.node.key))), inGroup)))

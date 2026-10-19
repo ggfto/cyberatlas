@@ -22,4 +22,12 @@ describe('InfraNode', () => {
     )
     expect(screen.getByText('outofsync')).toBeInTheDocument()
   })
+  it('servico que e processo do host diz isso no tipo', () => {
+    render(
+      <ReactFlowProvider>
+        <InfraNode data={{ label: 'clink', kind: 'SERVICE', state: 'online', reason: '', hostProcess: true }} />
+      </ReactFlowProvider>,
+    )
+    expect(screen.getByText('servico · processo no host')).toBeInTheDocument()
+  })
 })
