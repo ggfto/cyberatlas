@@ -21,7 +21,7 @@ class NativeReflectionTest {
         for (Class<?> c : Frame.class.getPermittedSubclasses()) {
             assertTrue(r.contains(c), "frame sem reflexao no nativo: " + c.getSimpleName());
         }
-        for (Class<?> c : List.of(Frame.class, Frame.LocalCheck.class, Fragment.class, Node.class, Edge.class, Observation.class)) {
+        for (Class<?> c : List.of(Frame.class, Frame.LocalCheck.class, Fragment.class, Node.class, Edge.class, Observation.class, io.github.ggfto.atlas.core.LogLine.class)) {
             assertTrue(r.contains(c), "record sem reflexao no nativo: " + c.getSimpleName());
         }
     }

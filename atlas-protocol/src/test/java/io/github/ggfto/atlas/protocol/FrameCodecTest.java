@@ -35,7 +35,11 @@ class FrameCodecTest {
                 new Frame.Reject("versao 7 fora da janela [0, 1]"),
                 new Frame.Snapshot("docker", 3, frag),
                 new Frame.Resync("docker"),
-                new Frame.Heartbeat(AT.toEpochMilli()));
+                new Frame.Heartbeat(AT.toEpochMilli()),
+                new Frame.LogOpen("s-9", "docker:vps/9router", null, 200, null, true),
+                new Frame.LogLines("s-9", 4, List.of(new io.github.ggfto.atlas.core.LogLine(AT, "stderr", "boot ok", false)), 3),
+                new Frame.Credit("s-9", 8),
+                new Frame.LogClose("s-9", "sem assinantes"));
         for (Frame f : frames) {
             assertEquals(f, FrameCodec.decode(FrameCodec.encode(f)));
         }

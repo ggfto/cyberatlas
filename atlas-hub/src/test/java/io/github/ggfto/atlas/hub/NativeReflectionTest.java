@@ -35,7 +35,7 @@ class NativeReflectionTest {
         for (Class<?> c : frames()) {
             assertTrue(r.contains(c), "frame sem reflexao no nativo: " + c.getSimpleName());
         }
-        for (Class<?> c : List.of(Frame.class, Fragment.class, Observation.class, Topology.class, io.github.ggfto.atlas.core.TopologyPatch.class)) {
+        for (Class<?> c : List.of(Frame.class, Fragment.class, Observation.class, Topology.class, io.github.ggfto.atlas.core.LogLine.class, io.github.ggfto.atlas.core.TopologyPatch.class)) {
             assertTrue(r.contains(c), "record sem reflexao no nativo: " + c.getSimpleName());
         }
     }

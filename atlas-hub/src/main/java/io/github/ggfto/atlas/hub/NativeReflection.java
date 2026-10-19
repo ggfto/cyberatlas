@@ -3,6 +3,7 @@ package io.github.ggfto.atlas.hub;
 import io.github.ggfto.atlas.core.Edge;
 import io.github.ggfto.atlas.core.EdgeKind;
 import io.github.ggfto.atlas.core.Fragment;
+import io.github.ggfto.atlas.core.LogLine;
 import io.github.ggfto.atlas.core.Node;
 import io.github.ggfto.atlas.core.NodeKind;
 import io.github.ggfto.atlas.core.NodeStatus;
@@ -22,6 +23,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
 @RegisterForReflection(targets = {Topology.class, TopologyNode.class, Node.class, NodeStatus.class, SourceState.class,
         Edge.class, State.class, NodeKind.class, EdgeKind.class, Fragment.class, Observation.class, TopologyPatch.class,
         Frame.class, Frame.Hello.class, Frame.Welcome.class, Frame.LocalCheck.class, Frame.Reject.class,
-        Frame.Snapshot.class, Frame.Resync.class, Frame.Heartbeat.class})
+        Frame.Snapshot.class, Frame.Resync.class, Frame.Heartbeat.class, Frame.LogOpen.class, Frame.LogLines.class,
+        Frame.Credit.class, Frame.LogClose.class, LogLine.class})
 final class NativeReflection {
 }

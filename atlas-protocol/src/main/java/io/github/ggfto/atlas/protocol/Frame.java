@@ -8,7 +8,8 @@ import java.util.Map;
 
 /**
  * Frames edge ⇄ hub (design §1.1), um por mensagem de texto do WebSocket. A identidade do edge vem do CN do
- * certificado mTLS, nunca do {@code Hello}. Frames de log (LogOpen/LogLines/Credit) entram na F4, patch na F3.
+ * certificado mTLS, nunca do {@code Hello}. Log (F4): o hub abre com {@code LogOpen} e da {@code Credit}; o edge so
+ * manda {@code LogLines} com credito e, sem credito, descarta as mais antigas e conta em {@code dropped}.
  */
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type")
 @JsonSubTypes({
@@ -18,6 +19,10 @@ import java.util.Map;
     @JsonSubTypes.Type(value = Frame.Snapshot.class, name = "snapshot"),
     @JsonSubTypes.Type(value = Frame.Resync.class, name = "resync"),
     @JsonSubTypes.Type(value = Frame.Heartbeat.class, name = "heartbeat"),
+    @JsonSubTypes.Type(value = Frame.LogOpen.class, name = "log-open"),
+    @JsonSubTypes.Type(value = Frame.LogLines.class, name = "log-lines"),
+    @JsonSubTypes.Type(value = Frame.Credit.class, name = "credit"),
+    @JsonSubTypes.Type(value = Frame.LogClose.class, name = "log-close"),
 })
 public sealed interface Frame {
 
@@ -55,5 +60,24 @@ public sealed interface Frame {
 
     /** os dois sentidos, a cada ~20 s. */
     record Heartbeat(long epochMs) implements Frame {
+    }
+
+    /** hub → edge: abre um follow local. {@code container} so para pod com mais de um. */
+    record LogOpen(String streamId, String nodeKey, String container, int tail, Long sinceEpochMs, boolean follow) implements Frame {
+    }
+
+    /** edge → hub: um lote de linhas ja redigidas; {@code dropped} = descartadas por falta de credito desde o lote anterior. */
+    record LogLines(String streamId, long seq, List<io.github.ggfto.atlas.core.LogLine> lines, long dropped) implements Frame {
+        public LogLines {
+            lines = List.copyOf(lines);
+        }
+    }
+
+    /** hub → edge: pode mandar mais {@code batches} lotes neste stream. */
+    record Credit(String streamId, int batches) implements Frame {
+    }
+
+    /** os dois sentidos: fim do stream, com o motivo. */
+    record LogClose(String streamId, String reason) implements Frame {
     }
 }
