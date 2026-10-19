@@ -84,4 +84,57 @@ describe('App', () => {
     fireEvent.click(await screen.findByText('9router'))
     expect(screen.queryByTestId('log-panel')).not.toBeInTheDocument()
   })
+
+  const route = (table) => (url) => {
+    const hit = Object.entries(table).find(([k]) => url.startsWith(k))
+    const [status, body] = hit ? hit[1] : [404, {}]
+    return Promise.resolve({ ok: status < 300, status, json: async () => body })
+  }
+  const tn = (key, kind, name) => ({ node: { key, kind, name, machine: 'vps', attributes: {} }, status: { state: 'ONLINE' }, drift: [] })
+  const snap = { nodes: [tn('machine:vps', 'MACHINE', 'vps'), tn('service:vps/x', 'SERVICE', 'x')], edges: [] }
+
+  it('posicao manual do /api/layout vence a automatica e so admin arrasta', async () => {
+    globalThis.EventSource = FakeEventSource
+    vi.spyOn(globalThis, 'fetch').mockImplementation(route({
+      '/api/me': [200, { name: 'bia', roles: ['atlas-admins'] }],
+      '/api/layout': [200, [{ nodeKey: 'service:vps/x', x: 77, y: 66, rev: 2 }]],
+      '/api/logs/targets': [200, []],
+    }))
+    const { container } = render(<App />)
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/layout', expect.anything()))
+    act(() => FakeEventSource.last.emit('snapshot', snap))
+    await act(async () => {})
+    // posicao no DOM nao serve no jsdom (o React Flow prende o filho na caixa do pai, que mede 0): o no mostra o pino
+    expect(await screen.findByLabelText('posição manual')).toBeInTheDocument()
+    expect(container.querySelector('[data-id="service:vps/x"]').classList.contains('draggable')).toBe(true)
+  })
+
+  it('viewer nao arrasta', async () => {
+    globalThis.EventSource = FakeEventSource
+    vi.spyOn(globalThis, 'fetch').mockImplementation(route({
+      '/api/me': [200, { name: 'ana', roles: ['atlas-viewers'] }],
+      '/api/layout': [200, []],
+      '/api/logs/targets': [403, {}],
+    }))
+    const { container } = render(<App />)
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/me', expect.anything()))
+    act(() => FakeEventSource.last.emit('snapshot', snap))
+    await act(async () => {})
+    expect(container.querySelector('[data-id="service:vps/x"]').classList.contains('draggable')).toBe(false)
+    expect(screen.queryByLabelText('posição manual')).not.toBeInTheDocument()
+  })
+
+  it('sessao expirada: o stream cai, /api/me da 401 e aparece o link para entrar de novo', async () => {
+    globalThis.EventSource = FakeEventSource
+    let expired = false
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) =>
+      route({ '/api/me': expired ? [401, {}] : [200, { name: 'ana', roles: ['atlas-viewers'] }], '/api/layout': [200, []] })(url))
+    render(<App />)
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/me', expect.anything()))
+    expired = true
+    act(() => FakeEventSource.last.listeners.error?.({}))
+    const link = await screen.findByText('Sessão expirada: entrar de novo')
+    expect(link.getAttribute('href')).toBe('/')
+  })
 })
+

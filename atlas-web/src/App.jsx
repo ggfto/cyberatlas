@@ -6,6 +6,7 @@ import { buildInfraTopology } from './lib/topology.js'
 import { applyPatch } from './lib/patch.js'
 import { LogPanel } from './components/LogPanel.jsx'
 import { MAX_TABS } from './lib/logTabs.js'
+import { applyLayout, saveMove } from './lib/layout.js'
 
 const WITH_LOGS = new Set(['CONTAINER', 'POD'])
 
@@ -14,6 +15,31 @@ export default function App() {
   const [error, setError] = useState(null)
   const [logsOn, setLogsOn] = useState(false)
   const [logTargets, setLogTargets] = useState([])
+  const [me, setMe] = useState(null)
+  const [manual, setManual] = useState({})
+  const [sessionLost, setSessionLost] = useState(false)
+
+  const checkSession = useCallback(() => {
+    return fetch('/api/me', { headers: { Accept: 'application/json' } })
+      .then(async (r) => {
+        if (r.status === 401) {
+          setSessionLost(true)
+          return
+        }
+        if (r.ok) setMe(await r.json())
+      })
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    checkSession()
+    fetch('/api/layout', { headers: { Accept: 'application/json' } })
+      .then(async (r) => {
+        const rows = r.ok ? await r.json() : []
+        if (Array.isArray(rows)) setManual(Object.fromEntries(rows.map((p) => [p.nodeKey, p])))
+      })
+      .catch(() => {})
+  }, [checkSession])
 
   useEffect(() => {
     // logs so existem com atlas.logs.enabled no hub (desligado ate a F5): 404 aqui e o mapa fica sem painel
@@ -43,7 +69,11 @@ export default function App() {
         setSnapshot(JSON.parse(ev.data))
       })
       es.addEventListener('patch', (ev) => setSnapshot((cur) => applyPatch(cur, JSON.parse(ev.data))))
-      es.addEventListener('error', () => setError('stream interrompido, reconectando'))
+      es.addEventListener('error', () => {
+        setError('stream interrompido, reconectando')
+        // o EventSource nao diz o status: se foi a sessao que expirou, a reconexao nunca vai passar
+        checkSession()
+      })
       return () => es.close()
     }
     const ctrl = new AbortController()
@@ -56,15 +86,30 @@ export default function App() {
         if (e.name !== 'AbortError') setError(e.message)
       })
     return () => ctrl.abort()
-  }, [])
+  }, [checkSession])
 
-  const graph = useMemo(() => buildInfraTopology(snapshot), [snapshot])
+  const graph = useMemo(() => {
+    const g = buildInfraTopology(snapshot)
+    return { ...g, nodes: applyLayout(g.nodes, manual) }
+  }, [snapshot, manual])
+  const admin = me?.roles?.includes('atlas-admins') ?? false
+
+  const move = useCallback((node) => {
+    saveMove(node.id, node.position, node.data?.rev ?? 0)
+      .then((p) => setManual((cur) => ({ ...cur, [p.nodeKey ?? node.id]: p })))
+      .catch((e) => setError(`posicao nao salva (${e.message})`))
+  }, [])
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
       <MriPageHeader title="Cyber Atlas" icon={Network} count={snapshot.nodes?.length ?? 0} countLabel="nós" />
+      {sessionLost && (
+        <a className="text-sm text-amber-500 underline" href="/">
+          Sessão expirada: entrar de novo
+        </a>
+      )}
       {error && <div className="text-sm text-red-500">Nao foi possivel carregar o mapa ({error}).</div>}
-      <InfraMap nodes={graph.nodes} edges={graph.edges} onNodeClick={openLogs} height={logTargets.length ? 'h-[40vh]' : undefined} />
+      <InfraMap nodes={graph.nodes} edges={graph.edges} onNodeClick={openLogs} onMove={move} editable={admin} height={logTargets.length ? 'h-[40vh]' : undefined} />
       {logTargets.length > 0 && (
         <LogPanel targets={logTargets} onClose={(key) => setLogTargets((cur) => cur.filter((t) => t.key !== key))} />
       )}

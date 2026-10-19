@@ -1,4 +1,6 @@
-import { ReactFlow, Background, Handle, Position } from '@xyflow/react'
+import { useEffect, useState } from 'react'
+import { ReactFlow, Background, Handle, Position, applyNodeChanges } from '@xyflow/react'
+import { Pin } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
 
 // verde online, ambar degradado, vermelho offline, cinza desconhecido (sem fonte fresca)
@@ -15,6 +17,7 @@ export function InfraNode({ data }) {
       <Handle type="target" position={Position.Left} />
       <div className="flex items-center gap-2">
         <span className="truncate text-sm font-medium">{data.label}</span>
+        {data.rev > 0 && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="posição manual" />}
         <span className={`ml-auto h-2 w-2 shrink-0 rounded-full ${DOT[data.state] || DOT.unknown}`} aria-label={data.state} />
       </div>
       <div className="text-xs text-muted-foreground">{KIND_LABEL[data.kind] || data.kind}</div>
@@ -43,11 +46,26 @@ function MachineGroup({ data }) {
 
 const NODE_TYPES = { infra: InfraNode, machineGroup: MachineGroup }
 
-/** Canvas do mapa (molde do InfraMap do HiveKeeper). Nos e arestas vem prontos de buildInfraTopology. */
-export function InfraMap({ nodes, edges, onNodeClick, height = 'h-[72vh]' }) {
+/**
+ * Canvas do mapa (molde do InfraMap do HiveKeeper). Nos e arestas vem prontos de buildInfraTopology (+ layout
+ * manual). Com `editable`, arrastar move o no na tela e, ao soltar, chama `onMove(no)` para gravar a posicao.
+ */
+export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, height = 'h-[72vh]' }) {
+  const [local, setLocal] = useState(nodes)
+  useEffect(() => setLocal(nodes), [nodes])
   return (
     <div className={`${height} w-full rounded-lg border border-border`} data-testid="infra-map">
-      <ReactFlow nodes={nodes} edges={edges} nodeTypes={NODE_TYPES} fitView nodesConnectable={false} onNodeClick={onNodeClick}>
+      <ReactFlow
+        nodes={local}
+        edges={edges}
+        nodeTypes={NODE_TYPES}
+        fitView
+        nodesConnectable={false}
+        nodesDraggable={editable}
+        onNodesChange={(changes) => setLocal((cur) => applyNodeChanges(changes, cur))}
+        onNodeDragStop={(_, node) => onMove?.(node)}
+        onNodeClick={onNodeClick}
+      >
         <Background />
       </ReactFlow>
     </div>
