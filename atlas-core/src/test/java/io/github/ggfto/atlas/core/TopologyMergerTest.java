@@ -63,4 +63,14 @@ class TopologyMergerTest {
         Fragment b = frag("b", List.of(node("route:x", NodeKind.ROUTE, Map.of("exposure", "externo"))), List.of(), List.of());
         assertEquals("local", TopologyMerger.merge(List.of(b, a), Sanitizer.DEFAULT, NOW).nodes().get(0).node().attributes().get("exposure"));
     }
+
+    @Test
+    void correlatedEdgesJoinTheMap() {
+        Fragment yml = frag("servicesyml:vps", List.of(new Node("service:vps/9router", NodeKind.SERVICE, "9router", "vps",
+                Map.of("backend", "http://9router:20128"))), List.of(), List.of());
+        Fragment edge = frag("edge:vps/docker", List.of(new Node("docker:vps/9router", NodeKind.CONTAINER, "9router", "vps", Map.of())),
+                List.of(), List.of());
+        assertEquals(List.of(Edge.of("service:vps/9router", "docker:vps/9router", EdgeKind.ROUTES_TO)),
+                TopologyMerger.merge(List.of(yml, edge), Sanitizer.DEFAULT, NOW).edges());
+    }
 }

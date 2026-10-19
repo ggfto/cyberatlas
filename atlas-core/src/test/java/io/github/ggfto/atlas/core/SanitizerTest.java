@@ -37,4 +37,28 @@ class SanitizerTest {
         assertEquals(n.kind(), out.kind());
         assertEquals("ha.gf2.in", out.name());
     }
+
+    @Test
+    void containerKeepsOnlyRuntimeFactsNeverEnvOrLabels() {
+        Node n = new Node("docker:vps/9router", NodeKind.CONTAINER, "9router", "vps", Map.of(
+                "image", "ghcr.io/ggfto/9router:sha-1", "state", "running", "status", "Up 2 hours (healthy)", "health", "healthy",
+                "compose_project", "9router", "compose_service", "9router",
+                "env", "API_KEY=x", "label.traefik.http.middlewares.auth.basicauth.users", "admin:$apr1$hash", "command", "node server.js"));
+        assertEquals(Map.of("image", "ghcr.io/ggfto/9router:sha-1", "state", "running", "status", "Up 2 hours (healthy)",
+                "health", "healthy", "compose_project", "9router", "compose_service", "9router"),
+                Sanitizer.DEFAULT.sanitize(n).attributes());
+    }
+
+    @Test
+    void routerPodAndWorkloadHaveTheirOwnLists() {
+        assertEquals(Map.of("rule", "Host(`ha.gf2.in`)", "service", "ha@file", "status", "enabled"),
+                Sanitizer.DEFAULT.sanitize(new Node("router:vps/ha", NodeKind.ROUTER, "ha", "vps", Map.of(
+                        "rule", "Host(`ha.gf2.in`)", "service", "ha@file", "status", "enabled", "middlewares", "auth@file"))).attributes());
+        assertEquals(Map.of("namespace", "dozzle", "phase", "Running", "ready", "1/1", "restarts", "0"),
+                Sanitizer.DEFAULT.sanitize(new Node("k8s:vps/dozzle/pod/d-1", NodeKind.POD, "d-1", "vps", Map.of(
+                        "namespace", "dozzle", "phase", "Running", "ready", "1/1", "restarts", "0", "env", "x"))).attributes());
+        assertEquals(Map.of("namespace", "dozzle", "ready", "1", "desired", "1"),
+                Sanitizer.DEFAULT.sanitize(new Node("k8s:vps/dozzle/deployment/d", NodeKind.WORKLOAD, "d", "vps", Map.of(
+                        "namespace", "dozzle", "ready", "1", "desired", "1", "annotations", "x"))).attributes());
+    }
 }

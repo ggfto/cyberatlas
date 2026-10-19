@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.adapters.hub;
 
+import io.github.ggfto.atlas.core.Expectation;
 import java.net.URI;
 
 /** Uma rota publica a checar pela internet, com o que ela deveria responder. */

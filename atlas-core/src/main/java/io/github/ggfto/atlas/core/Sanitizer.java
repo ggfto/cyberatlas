@@ -19,7 +19,11 @@ public final class Sanitizer {
             NodeKind.ENTRY, Set.of("via"),
             NodeKind.AUTHGATE, Set.of("provider"),
             NodeKind.ROUTE, Set.of("fqdn", "exposure", "auth", "url"),
-            NodeKind.SERVICE, Set.of("backend", "exposure", "auth")));
+            NodeKind.SERVICE, Set.of("backend", "exposure", "auth"),
+            NodeKind.CONTAINER, Set.of("image", "state", "status", "health", "compose_project", "compose_service"),
+            NodeKind.ROUTER, Set.of("rule", "service", "status", "provider"),
+            NodeKind.POD, Set.of("namespace", "phase", "ready", "restarts", "owner", "image"),
+            NodeKind.WORKLOAD, Set.of("namespace", "workload", "ready", "desired", "image")));
 
     private final Map<NodeKind, Set<String>> allowed;
 

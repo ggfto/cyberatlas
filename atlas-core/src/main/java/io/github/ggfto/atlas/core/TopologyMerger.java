@@ -10,8 +10,8 @@ import java.util.TreeMap;
 
 /**
  * Junta fragmentos de varias fontes num mapa: nos pela chave (atributos somados; em conflito vale a fonte de
- * nome menor, para ser deterministico), arestas por id, so as que ligam nos existentes, e o estado de cada no
- * pelo {@link StatusMerge}. Todo no sai pelo {@link Sanitizer}.
+ * nome menor, para ser deterministico), arestas por id (mais as do {@link Correlator}), so as que ligam nos
+ * existentes, e o estado de cada no pelo {@link StatusMerge}. Todo no sai pelo {@link Sanitizer}.
  */
 public final class TopologyMerger {
 
@@ -35,11 +35,12 @@ public final class TopologyMerger {
                         StatusMerge.merge(observations.getOrDefault(n.key(), List.of()), now)))
                 .toList();
         Map<String, Edge> edges = new TreeMap<>();
-        for (Fragment f : ordered) {
-            for (Edge e : f.edges()) {
-                if (nodes.containsKey(e.from()) && nodes.containsKey(e.to())) {
-                    edges.putIfAbsent(e.id(), e);
-                }
+        List<Edge> all = new ArrayList<>();
+        ordered.forEach(f -> all.addAll(f.edges()));
+        all.addAll(Correlator.edges(nodes.values()));
+        for (Edge e : all) {
+            if (nodes.containsKey(e.from()) && nodes.containsKey(e.to())) {
+                edges.putIfAbsent(e.id(), e);
             }
         }
         return new Topology(now, out, List.copyOf(edges.values()));

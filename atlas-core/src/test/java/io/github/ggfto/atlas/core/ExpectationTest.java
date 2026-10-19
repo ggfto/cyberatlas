@@ -1,12 +1,10 @@
-package io.github.ggfto.atlas.adapters.hub;
+package io.github.ggfto.atlas.core;
 
-import io.github.ggfto.atlas.core.ProbeResult;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import io.github.ggfto.atlas.core.Observation;
-import io.github.ggfto.atlas.core.State;
 import java.time.Duration;
 import java.time.Instant;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -66,5 +64,13 @@ class ExpectationTest {
         Observation o = run(OPEN, status, location, error);
         assertEquals(state, o.state());
         assertEquals(reason, o.reason());
+    }
+
+    @Test
+    void edgeReportsTheSameRulesUnderItsOwnSource() {
+        Observation o = PROTECTED.classify("route:fx.local.gf2.in", new ProbeResult(200, null, null), AT, Duration.ofSeconds(90),
+                Expectation.LOCAL);
+        assertEquals("check:local", o.source());
+        assertEquals(State.DEGRADED, o.state());
     }
 }

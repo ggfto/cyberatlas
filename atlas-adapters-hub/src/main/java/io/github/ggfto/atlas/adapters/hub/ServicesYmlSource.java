@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.adapters.hub;
 
+import io.github.ggfto.atlas.core.Expectation;
 import io.github.ggfto.atlas.core.Edge;
 import io.github.ggfto.atlas.core.EdgeKind;
 import io.github.ggfto.atlas.core.Fragment;
