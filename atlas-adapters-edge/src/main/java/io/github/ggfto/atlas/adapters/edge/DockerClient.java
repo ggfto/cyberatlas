@@ -18,7 +18,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.regex.Pattern;
 
 /**
- * Cliente HTTP minimo do Docker Engine sobre o socket Unix (design §2: o docker-java nao vai bem em native).
+ * Cliente HTTP minimo do Docker Engine, pelo socket Unix ou pelo TCP do docker-socket-proxy (design §2: o
+ * docker-java nao vai bem em native).
  * So tres GETs passam, com allowlist aqui no codigo, alem do socket-proxy: a listagem, os eventos e os logs.
  * O inspect ({@code /containers/{id}/json}) traz {@code Config.Env} e nunca e chamado.
  */
@@ -30,12 +31,28 @@ public final class DockerClient {
             Pattern.compile("^/events" + QUERY + "$"),
             Pattern.compile("^/containers/[a-f0-9]{12,64}/logs" + QUERY + "$"));
 
-    private final Path socket;
+    private final java.net.SocketAddress address;
     private final Duration timeout;
 
     public DockerClient(Path socket, Duration timeout) {
-        this.socket = socket;
+        this(UnixDomainSocketAddress.of(socket), timeout);
+    }
+
+    private DockerClient(java.net.SocketAddress address, Duration timeout) {
+        this.address = address;
         this.timeout = timeout;
+    }
+
+    /**
+     * {@code unix:///var/run/docker.sock} ou {@code tcp://socket-proxy:2375} (o docker-socket-proxy usual expoe
+     * TCP). Qualquer outro esquema e recusado.
+     */
+    public static DockerClient of(java.net.URI endpoint, Duration timeout) {
+        return switch (String.valueOf(endpoint.getScheme())) {
+            case "unix" -> new DockerClient(Path.of(endpoint.getPath()), timeout);
+            case "tcp" -> new DockerClient(new java.net.InetSocketAddress(endpoint.getHost(), endpoint.getPort()), timeout);
+            default -> throw new IllegalArgumentException("endpoint do docker so unix:// ou tcp://: " + endpoint);
+        };
     }
 
     public static boolean allowed(String path) {
@@ -46,7 +63,8 @@ public final class DockerClient {
         if (!allowed(path)) {
             throw new IllegalArgumentException("endpoint do docker fora da allowlist: " + path);
         }
-        SocketChannel ch = SocketChannel.open(StandardProtocolFamily.UNIX);
+        SocketChannel ch = address instanceof UnixDomainSocketAddress
+                ? SocketChannel.open(StandardProtocolFamily.UNIX) : SocketChannel.open();
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
             var call = pool.submit(() -> exchange(ch, path));
             try {
@@ -66,7 +84,7 @@ public final class DockerClient {
     }
 
     private String exchange(SocketChannel ch, String path) throws IOException {
-        ch.connect(UnixDomainSocketAddress.of(socket));
+        ch.connect(address);
         String req = "GET " + path + " HTTP/1.1\r\nHost: docker\r\nUser-Agent: cyberatlas-edge\r\nConnection: close\r\n\r\n";
         ch.write(ByteBuffer.wrap(req.getBytes(StandardCharsets.US_ASCII)));
         ByteArrayOutputStream all = new ByteArrayOutputStream();

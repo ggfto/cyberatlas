@@ -42,7 +42,7 @@ class EdgeFragmentGuardTest {
                 List.of(o("docker:vps/9router"), o("docker:host/fx-panel"), o("service:vps/9router"), o("service:host/x"),
                         o("route:ha.gf2.in"), o("route:fx.local.gf2.in"), o("authgate:authentik")));
         Map<String, String> routeMachine = Map.of("route:ha.gf2.in", "vps", "route:fx.local.gf2.in", "host");
-        Fragment out = EdgeFragmentGuard.accept(in, "vps", routeMachine::get);
+        Fragment out = EdgeFragmentGuard.accept(in, "vps", routeMachine::get, AT, TTL);
         assertEquals("edge:vps/servicesyml:host", out.source());
         assertEquals(List.of("docker:vps/9router"), out.nodes().stream().map(Node::key).toList());
         assertEquals(List.of(Edge.of("traefik:vps", "docker:vps/9router", EdgeKind.ROUTES_TO)), out.edges());
@@ -58,6 +58,20 @@ class EdgeFragmentGuardTest {
                         n("k8s:vps/dozzle/pod/d-1", NodeKind.POD, "vps"), n("k8s:host/x/pod/y", NodeKind.POD, "vps")),
                 List.of(), List.of());
         assertEquals(List.of("traefik:vps", "router:vps/ha@file", "k8s:vps/dozzle/pod/d-1"),
-                EdgeFragmentGuard.accept(in, "vps", k -> null).nodes().stream().map(Node::key).toList());
+                EdgeFragmentGuard.accept(in, "vps", k -> null, AT, TTL).nodes().stream().map(Node::key).toList());
+    }
+
+    @Test
+    void edgeCannotKeepItsStateFreshForever() {
+        // TTL de um ano ou relogio no futuro manteriam o no "online" depois de o edge cair
+        Fragment in = new Fragment("docker", AT.plusSeconds(3600), Duration.ofDays(365),
+                List.of(n("docker:vps/a", NodeKind.CONTAINER, "vps")), List.of(),
+                List.of(new Observation("docker:vps/a", "docker", State.ONLINE, "ok", AT.plusSeconds(3600), Duration.ofDays(365))));
+        Fragment out = EdgeFragmentGuard.accept(in, "vps", k -> null, AT, TTL);
+        Observation o = out.observations().get(0);
+        assertEquals(AT, o.observedAt());
+        assertEquals(TTL, o.ttl());
+        assertEquals(TTL, out.ttl());
+        assertEquals(AT, out.observedAt());
     }
 }

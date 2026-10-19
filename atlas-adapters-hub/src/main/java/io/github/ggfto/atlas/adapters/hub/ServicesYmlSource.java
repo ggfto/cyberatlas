@@ -102,6 +102,44 @@ public final class ServicesYmlSource implements TopologySource {
         return out;
     }
 
+    /**
+     * O que so o edge desta maquina alcanca: o backend interno de cada servico (status do upstream) e as rotas
+     * {@code *.local}. Vai no Welcome do edge (design §1.2).
+     */
+    public List<CheckTarget> localTargets() {
+        Parsed p = parse();
+        String authHost = "auth." + p.zone();
+        List<CheckTarget> out = new ArrayList<>();
+        for (Service s : p.services()) {
+            URI backend = backendUri(s.backend());
+            if (backend != null) {
+                out.add(new CheckTarget("service:" + machine + "/" + s.name(), backend, new Expectation.Open(authHost)));
+            }
+            for (Route r : routes(s, p.zone())) {
+                if (!r.publicCheck()) {
+                    Expectation e = s.auth() ? new Expectation.Protected(authHost) : new Expectation.Open(authHost);
+                    out.add(new CheckTarget("route:" + r.fqdn(), URI.create(url(r.fqdn())), e));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static URI backendUri(String backend) {
+        if (backend == null) {
+            return null;
+        }
+        try {
+            URI u = URI.create(backend.trim());
+            if (!"http".equals(u.getScheme()) && !"https".equals(u.getScheme())) {
+                return null;
+            }
+            return u.getRawPath() == null || u.getRawPath().isEmpty() ? URI.create(u + "/") : u;
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     private record Parsed(String zone, List<Service> services) {
     }
 

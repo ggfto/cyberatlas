@@ -131,4 +131,25 @@ class DockerSourceTest {
             assertEquals("Saída ção ".repeat(30), f.nodes().get(0).attributes().get("status"));
         }
     }
+
+    @Test
+    void tcpEndpointOfTheSocketProxyWorksWithTheSameAllowlist() throws Exception {
+        // docker-socket-proxy (tecnativa/linuxserver) expoe HTTP em TCP :2375; o edge nunca monta o docker.sock cru
+        try (FakeHttp proxy = new FakeHttp(Map.of("/containers/json", new FakeHttp.Reply(200, fixture())))) {
+            DockerClient client = DockerClient.of(java.net.URI.create("tcp://127.0.0.1:" + proxy.base().getPort()), Duration.ofSeconds(5));
+            Fragment f = new DockerSource("host", client, CLOCK, Duration.ofSeconds(90)).collect();
+            assertEquals(6, f.nodes().size());
+            assertThrows(IllegalArgumentException.class, () -> client.get("/containers/a1b2c3d4e5f6/json"));
+            assertEquals(List.of("/containers/json"), proxy.requested);
+        }
+    }
+
+    @Test
+    void unixUriAndUnsupportedSchemes(@TempDir Path dir) throws Exception {
+        try (FakeDockerSocket fake = new FakeDockerSocket(dir, Map.of(LIST, new FakeDockerSocket.Reply(200, "[]", false)))) {
+            DockerClient.of(java.net.URI.create("unix://" + fake.socket), Duration.ofSeconds(5)).get(LIST);
+            assertEquals(List.of(LIST), fake.requested);
+        }
+        assertThrows(IllegalArgumentException.class, () -> DockerClient.of(java.net.URI.create("http://docker:2375"), Duration.ofSeconds(1)));
+    }
 }

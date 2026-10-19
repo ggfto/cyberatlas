@@ -136,4 +136,16 @@ class ServicesYmlSourceTest {
         IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> collect("vps", yaml));
         assertEquals("services.yml (vps): exposure invalida em a: publico", e.getMessage());
     }
+
+    @Test
+    void localTargetsAreTheBackendsAndTheLocalRoutesOfTheMachine() {
+        ServicesYmlSource host = new ServicesYmlSource("host", () -> fixture("services-host.yml"), CLOCK);
+        Map<String, CheckTarget> t = host.localTargets().stream().collect(Collectors.toMap(CheckTarget::nodeKey, x -> x));
+        // backend interno: o status do upstream que o check publico atras do Authentik nao prova
+        assertEquals("http://fx-panel:8080/", t.get("service:host/fx-panel").url().toString());
+        assertEquals(new Expectation.Open("auth.gf2.in"), t.get("service:host/fx-panel").expectation());
+        // rota *.local: so a LAN (e o edge) alcanca
+        assertEquals(new Expectation.Protected("auth.gf2.in"), t.get("route:fx.local.gf2.in").expectation());
+        assertFalse(t.keySet().stream().anyMatch(k -> k.startsWith("route:") && !k.contains(".local.")));
+    }
 }

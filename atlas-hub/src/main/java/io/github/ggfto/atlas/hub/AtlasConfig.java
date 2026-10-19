@@ -4,6 +4,7 @@ import io.smallrye.config.ConfigMapping;
 import io.smallrye.config.WithDefault;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
 @ConfigMapping(prefix = "atlas")
 public interface AtlasConfig {
@@ -13,6 +14,23 @@ public interface AtlasConfig {
     Checks checks();
 
     Collect collect();
+
+    Edges edges();
+
+    interface Edges {
+        /** CA do atlas (PEM). Sem as duas, nao ha enrollment nem edge conectado. */
+        Optional<String> caCert();
+
+        Optional<String> caKey();
+
+        /** Porta (do container) que so escuta no WG/cluster: TLS, WS mTLS dos edges e enrollment. */
+        @WithDefault("8443")
+        int port();
+
+        /** Criar/revogar edge por API. Desligado ate a F5 trazer login (OIDC + papel atlas-admins). */
+        @WithDefault("false")
+        boolean adminEnabled();
+    }
 
     interface Collect {
         /** Intervalo de coleta das fontes (lido pelo @Scheduled como {atlas.collect.every}). */

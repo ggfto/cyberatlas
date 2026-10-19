@@ -39,6 +39,23 @@ public final class TopologyCollector {
         }
     }
 
+    /** Fragmento empurrado por um edge (ja passado pelo EdgeFragmentGuard). */
+    public void accept(Fragment fragment) {
+        last.put(fragment.source(), fragment);
+    }
+
+    /** Maquina declarada de um no (ex.: a de uma rota no services.yml). */
+    public String machineOf(String nodeKey) {
+        for (Fragment f : last.values()) {
+            for (var n : f.nodes()) {
+                if (n.key().equals(nodeKey)) {
+                    return n.machine();
+                }
+            }
+        }
+        return null;
+    }
+
     public Topology snapshot(Instant now) {
         return TopologyMerger.merge(List.copyOf(last.values()), Sanitizer.DEFAULT, now);
     }

@@ -25,12 +25,16 @@ import java.util.TreeMap;
 public class TopologyService {
 
     private final TopologyCollector collector;
+    private final java.util.Map<String, ServicesYmlSource> byMachine = new java.util.TreeMap<>();
 
     TopologyService(AtlasConfig config) {
         Clock clock = Clock.systemUTC();
         List<ServicesYmlSource> files = new ArrayList<>();
-        new TreeMap<>(config.servicesyml().files()).forEach((machine, file) ->
-                files.add(new ServicesYmlSource(machine, () -> read(Path.of(file)), clock)));
+        new TreeMap<>(config.servicesyml().files()).forEach((machine, file) -> {
+            ServicesYmlSource src = new ServicesYmlSource(machine, () -> read(Path.of(file)), clock);
+            files.add(src);
+            byMachine.put(machine, src);
+        });
         List<TopologySource> sources = new ArrayList<>(files);
         if (config.checks().enabled()) {
             sources.add(new PublicChecks(() -> targets(files), new HttpProber(config.checks().timeout()), clock,
@@ -50,6 +54,21 @@ public class TopologyService {
 
     public Topology snapshot() {
         return collector.snapshot(Instant.now());
+    }
+
+    /** Fragmento de um edge, ja filtrado pela guarda. */
+    public void accept(io.github.ggfto.atlas.core.Fragment fragment) {
+        collector.accept(fragment);
+    }
+
+    public String machineOf(String nodeKey) {
+        return collector.machineOf(nodeKey);
+    }
+
+    /** Backends e rotas *.local da maquina: vao no Welcome do edge. */
+    public List<CheckTarget> localTargets(String machine) {
+        ServicesYmlSource src = byMachine.get(machine);
+        return src == null ? List.of() : src.localTargets();
     }
 
     private static List<CheckTarget> targets(List<ServicesYmlSource> files) {
