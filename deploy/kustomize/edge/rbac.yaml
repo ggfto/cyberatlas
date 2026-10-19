@@ -1,6 +1,7 @@
 # SA do edge e o papel SO LEITURA do que o KubernetesSource/KubernetesLogSource pedem: listar pods e os donos
-# (deployments, replicasets, statefulsets, daemonsets) em todos os namespaces e ler o log de um pod. Nada de
-# secrets, configmaps, exec, nem verbo de escrita. "watch" nao e usado hoje (so list), fica para os informers.
+# (deployments, replicasets, statefulsets, daemonsets) e os services (so selector e nodePort, para ligar o
+# backend host.docker.internal:<nodePort> do services.yml ao workload) em todos os namespaces e ler o log de um
+# pod. Nada de secrets, configmaps, endpoints, exec, nem verbo de escrita. "watch" nao e usado hoje (so list), fica para os informers.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -14,7 +15,7 @@ metadata:
   name: atlas-edge-read
 rules:
   - apiGroups: [""]
-    resources: ["pods", "pods/log"]
+    resources: ["pods", "pods/log", "services"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]

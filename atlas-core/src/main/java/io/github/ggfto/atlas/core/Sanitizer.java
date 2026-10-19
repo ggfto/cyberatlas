@@ -22,8 +22,8 @@ public final class Sanitizer {
             Map.entry(NodeKind.SERVICE, Set.of("backend", "exposure", "auth")),
             Map.entry(NodeKind.CONTAINER, Set.of("image", "state", "status", "health", "compose_project", "compose_service")),
             Map.entry(NodeKind.ROUTER, Set.of("rule", "service", "status", "provider")),
-            Map.entry(NodeKind.POD, Set.of("namespace", "phase", "ready", "restarts", "owner", "image")),
-            Map.entry(NodeKind.WORKLOAD, Set.of("namespace", "workload", "ready", "desired", "image")),
+            Map.entry(NodeKind.POD, Set.of("namespace", "phase", "ready", "restarts", "owner", "image", "nodeports")),
+            Map.entry(NodeKind.WORKLOAD, Set.of("namespace", "workload", "ready", "desired", "image", "nodeports")),
             // Cloudflare: nunca o conteudo do registro (IP), o id do tunel nem ids de conta/zona
             Map.entry(NodeKind.TUNNEL, Set.of("status", "connections")),
             Map.entry(NodeKind.DNS, Set.of("type", "proxied", "via", "managed")),

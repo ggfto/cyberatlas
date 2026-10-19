@@ -173,6 +173,7 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
   - `imagem-flutuante` (`:latest`/sem digest);
   - `dns-sem-servico` / `servico-sem-dns` (Cloudflare × `services.yml`);
   - `rota-protegida-aberta` (§1.4);
+  - `backend-container-inexistente` / `backend-nodeport-inexistente` (backend do `services.yml` aponta para container que o Docker da máquina não tem, ou para NodePort que nenhum Service do k3s da máquina expõe);
   - `sem-breakglass`.
 - **`management: base`** (anti-lockout): lista declarada na config (sshd, wg, k3s/docker, traefik, authentik+pg+redis, cloudflared, pihole). Os nós da lista recebem o selo "fora do Argo".
 

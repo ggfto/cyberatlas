@@ -20,7 +20,10 @@ export function InfraNode({ data }) {
         {data.rev > 0 && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="posição manual" />}
         <span className={`ml-auto h-2 w-2 shrink-0 rounded-full ${DOT[data.state] || DOT.unknown}`} aria-label={data.state} />
       </div>
-      <div className="text-xs text-muted-foreground">{KIND_LABEL[data.kind] || data.kind}</div>
+      <div className="text-xs text-muted-foreground">
+        {KIND_LABEL[data.kind] || data.kind}
+        {data.hostProcess && ' · processo no host'}
+      </div>
       {data.drift?.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1">
           {data.drift.map((d) => (

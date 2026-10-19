@@ -17,7 +17,11 @@ import java.util.TreeSet;
  * <li>{@code sem-application}: workload que nenhuma app do Argo gerencia (fora dos namespaces do sistema);</li>
  * <li>{@code imagem-flutuante}: imagem {@code :latest} ou sem tag (digest e tag fixa nao contam);</li>
  * <li>{@code servico-sem-dns} / {@code dns-sem-servico}: services.yml x registros da Cloudflare;</li>
- * <li>{@code rota-protegida-aberta}: rota com auth que respondeu sem login, enquanto o check e fresco.</li>
+ * <li>{@code rota-protegida-aberta}: rota com auth que respondeu sem login, enquanto o check e fresco;</li>
+ * <li>{@code backend-container-inexistente}: o backend do servico aponta para um nome de container que o Docker
+ * daquela maquina nao tem (nem parado). So com o Docker da maquina presente no mapa;</li>
+ * <li>{@code backend-nodeport-inexistente}: backend no proprio host numa porta da faixa de NodePort que nenhum
+ * Service do k3s daquela maquina expoe. So com {@code nodeports} da maquina presentes (edge le Services).</li>
  * </ul>
  */
 public final class DriftDetector {
@@ -33,9 +37,25 @@ public final class DriftDetector {
         nodes.forEach(t -> byKey.put(t.node().key(), t.node()));
         boolean argoKnown = nodes.stream().anyMatch(t -> t.node().kind() == NodeKind.ARGO);
         boolean dnsKnown = nodes.stream().anyMatch(t -> t.node().kind() == NodeKind.DNS);
+        Set<String> dockerMachines = new HashSet<>();
+        Set<String> nodePortMachines = new HashSet<>();
+        for (TopologyNode t : nodes) {
+            Node n = t.node();
+            if (n.kind() == NodeKind.CONTAINER && n.machine() != null) {
+                dockerMachines.add(n.machine());
+            }
+            if ((n.kind() == NodeKind.POD || n.kind() == NodeKind.WORKLOAD) && n.machine() != null
+                    && n.attributes().containsKey("nodeports")) {
+                nodePortMachines.add(n.machine());
+            }
+        }
+        Set<String> routed = new HashSet<>();
         Set<String> managed = new HashSet<>();
         Set<String> outOfSync = new HashSet<>();
         for (Edge e : edges) {
+            if (e.kind() == EdgeKind.ROUTES_TO && e.from().startsWith("service:")) {
+                routed.add(e.from());
+            }
             if (e.kind() == EdgeKind.MANAGES) {
                 managed.add(e.to());
                 Node app = byKey.get(e.from());
@@ -70,6 +90,15 @@ public final class DriftDetector {
             if (n.kind() == NodeKind.ROUTE && t.status().sources().stream()
                     .anyMatch(s -> s.fresh() && s.reason() != null && s.reason().startsWith(OPEN_PROTECTED))) {
                 flags.add("rota-protegida-aberta");
+            }
+            if (n.kind() == NodeKind.SERVICE && !routed.contains(n.key())) {
+                Correlator.Backend b = Correlator.backend(n);
+                if (b != null && !b.onHost() && b.host().indexOf('.') < 0 && dockerMachines.contains(n.machine())) {
+                    flags.add("backend-container-inexistente");
+                }
+                if (b != null && b.onHost() && b.nodePortRange() && nodePortMachines.contains(n.machine())) {
+                    flags.add("backend-nodeport-inexistente");
+                }
             }
             out.add(new TopologyNode(n, t.status(), List.copyOf(flags)));
         }
