@@ -1,10 +1,12 @@
 name: ci
 
 on:
+  # push so em main e tags v* (os que publicam); branch de PR roda so via pull_request, uma vez por commit
   push:
-    branches: ["**"]
+    branches: ["main"]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
