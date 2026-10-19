@@ -25,7 +25,7 @@ class SanitizerTest {
 
     @Test
     void ipv4LiteralsAreMaskedEvenInAllowedFields() {
-        Node n = new Node("service:host/x", NodeKind.SERVICE, "x", "host", Map.of("backend", "http://192.168.68.107:8080/a"));
+        Node n = new Node("service:host/x", NodeKind.SERVICE, "x", "host", Map.of("backend", "http://192.0.2.44:8080/a"));
         assertEquals("http://<ip>:8080/a", Sanitizer.DEFAULT.sanitize(n).attributes().get("backend"));
     }
 
