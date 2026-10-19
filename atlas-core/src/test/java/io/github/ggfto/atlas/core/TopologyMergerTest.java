@@ -73,4 +73,11 @@ class TopologyMergerTest {
         assertEquals(List.of(Edge.of("service:vps/9router", "docker:vps/9router", EdgeKind.ROUTES_TO)),
                 TopologyMerger.merge(List.of(yml, edge), Sanitizer.DEFAULT, NOW).edges());
     }
+
+    @Test
+    void driftIsAttachedToTheMergedNodes() {
+        Fragment f = frag("s", List.of(new Node("docker:vps/x", NodeKind.CONTAINER, "x", "vps", Map.of("image", "x:latest"))),
+                List.of(), List.of());
+        assertEquals(List.of("imagem-flutuante"), TopologyMerger.merge(List.of(f), Sanitizer.DEFAULT, NOW).nodes().get(0).drift());
+    }
 }

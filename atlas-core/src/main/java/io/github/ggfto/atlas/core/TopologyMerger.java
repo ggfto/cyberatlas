@@ -32,7 +32,7 @@ public final class TopologyMerger {
         }
         List<TopologyNode> out = nodes.values().stream()
                 .map(n -> new TopologyNode(sanitizer.sanitize(n),
-                        StatusMerge.merge(observations.getOrDefault(n.key(), List.of()), now)))
+                        StatusMerge.merge(observations.getOrDefault(n.key(), List.of()), now), List.of()))
                 .toList();
         Map<String, Edge> edges = new TreeMap<>();
         List<Edge> all = new ArrayList<>();
@@ -43,7 +43,8 @@ public final class TopologyMerger {
                 edges.putIfAbsent(e.id(), e);
             }
         }
-        return new Topology(now, out, List.copyOf(edges.values()));
+        List<Edge> merged = List.copyOf(edges.values());
+        return new Topology(now, DriftDetector.detect(out, merged, now), merged);
     }
 
     private static Node combine(Node first, Node later) {

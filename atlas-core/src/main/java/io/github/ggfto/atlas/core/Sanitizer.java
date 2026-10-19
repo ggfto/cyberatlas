@@ -15,15 +15,20 @@ public final class Sanitizer {
 
     private static final Pattern IPV4 = Pattern.compile("\\b(?:\\d{1,3}\\.){3}\\d{1,3}\\b");
 
-    public static final Sanitizer DEFAULT = new Sanitizer(Map.of(
-            NodeKind.ENTRY, Set.of("via"),
-            NodeKind.AUTHGATE, Set.of("provider"),
-            NodeKind.ROUTE, Set.of("fqdn", "exposure", "auth", "url"),
-            NodeKind.SERVICE, Set.of("backend", "exposure", "auth"),
-            NodeKind.CONTAINER, Set.of("image", "state", "status", "health", "compose_project", "compose_service"),
-            NodeKind.ROUTER, Set.of("rule", "service", "status", "provider"),
-            NodeKind.POD, Set.of("namespace", "phase", "ready", "restarts", "owner", "image"),
-            NodeKind.WORKLOAD, Set.of("namespace", "workload", "ready", "desired", "image")));
+    public static final Sanitizer DEFAULT = new Sanitizer(Map.ofEntries(
+            Map.entry(NodeKind.ENTRY, Set.of("via")),
+            Map.entry(NodeKind.AUTHGATE, Set.of("provider")),
+            Map.entry(NodeKind.ROUTE, Set.of("fqdn", "exposure", "auth", "url")),
+            Map.entry(NodeKind.SERVICE, Set.of("backend", "exposure", "auth")),
+            Map.entry(NodeKind.CONTAINER, Set.of("image", "state", "status", "health", "compose_project", "compose_service")),
+            Map.entry(NodeKind.ROUTER, Set.of("rule", "service", "status", "provider")),
+            Map.entry(NodeKind.POD, Set.of("namespace", "phase", "ready", "restarts", "owner", "image")),
+            Map.entry(NodeKind.WORKLOAD, Set.of("namespace", "workload", "ready", "desired", "image")),
+            // Cloudflare: nunca o conteudo do registro (IP), o id do tunel nem ids de conta/zona
+            Map.entry(NodeKind.TUNNEL, Set.of("status", "connections")),
+            Map.entry(NodeKind.DNS, Set.of("type", "proxied", "via", "managed")),
+            // Argo: nunca o destination.server (URL da API do cluster, IP do WG)
+            Map.entry(NodeKind.ARGO, Set.of("sync", "health", "namespace"))));
 
     private final Map<NodeKind, Set<String>> allowed;
 
