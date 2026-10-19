@@ -2,11 +2,11 @@ package io.github.ggfto.atlas.hub.edge;
 
 import io.quarkus.websockets.next.HttpUpgradeCheck;
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.infrastructure.Infrastructure;
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.Optional;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
 /**
@@ -43,12 +43,18 @@ public class EdgeUpgradeCheck implements HttpUpgradeCheck {
         if (hub.enrollment().isEmpty()) {
             return CheckResult.rejectUpgrade(503);
         }
-        Optional<String> machine = hub.enrollment().get().activeMachine(cert);
-        if (machine.isEmpty()) {
-            return CheckResult.rejectUpgrade(403);
-        }
-        ctx.userData().put(EdgeSocket.EDGE_ID, cert.getSubjectX500Principal().getName().substring(3));
-        ctx.userData().put(EdgeSocket.MACHINE, machine.get());
-        return CheckResult.permitUpgrade();
+        EnrollmentService enrollment = hub.enrollment().get();
+        // consulta ao Postgres: fora do event loop
+        return Uni.createFrom().item(() -> enrollment.activeMachine(cert))
+                .runSubscriptionOn(Infrastructure.getDefaultWorkerPool())
+                .flatMap(machine -> {
+                    if (machine.isEmpty()) {
+                        return CheckResult.rejectUpgrade(403);
+                    }
+                    ctx.userData().put(EdgeSocket.EDGE_ID, cert.getSubjectX500Principal().getName().substring(3));
+                    ctx.userData().put(EdgeSocket.MACHINE, machine.get());
+                    return CheckResult.permitUpgrade();
+                })
+                .onFailure().recoverWithUni(() -> CheckResult.rejectUpgrade(503));
     }
 }
