@@ -61,6 +61,9 @@ class PkiScriptTest {
             Set<PosixFilePermission> perms = Files.getPosixFilePermissions(out.resolve(key));
             assertEquals(Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE), perms, key);
         }
+        // a pasta guarda a chave da CA: so o dono entra (a umask protege tambem a janela antes do chmod)
+        assertEquals(Set.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE, PosixFilePermission.OWNER_EXECUTE),
+                Files.getPosixFilePermissions(out));
         assertTrue(!log.contains("PRIVATE KEY"), "script nao imprime chave");
     }
 
