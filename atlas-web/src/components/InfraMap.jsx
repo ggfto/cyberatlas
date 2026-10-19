@@ -44,10 +44,10 @@ function MachineGroup({ data }) {
 const NODE_TYPES = { infra: InfraNode, machineGroup: MachineGroup }
 
 /** Canvas do mapa (molde do InfraMap do HiveKeeper). Nos e arestas vem prontos de buildInfraTopology. */
-export function InfraMap({ nodes, edges }) {
+export function InfraMap({ nodes, edges, onNodeClick, height = 'h-[72vh]' }) {
   return (
-    <div className="h-[72vh] w-full rounded-lg border border-border" data-testid="infra-map">
-      <ReactFlow nodes={nodes} edges={edges} nodeTypes={NODE_TYPES} fitView nodesConnectable={false}>
+    <div className={`${height} w-full rounded-lg border border-border`} data-testid="infra-map">
+      <ReactFlow nodes={nodes} edges={edges} nodeTypes={NODE_TYPES} fitView nodesConnectable={false} onNodeClick={onNodeClick}>
         <Background />
       </ReactFlow>
     </div>

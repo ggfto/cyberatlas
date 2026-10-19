@@ -99,4 +99,29 @@ describe('buildInfraTopology', () => {
     expect(g['route:x.gf2.in'].data.drift).toEqual(['servico-sem-dns'])
     expect(byId(buildInfraTopology(SNAPSHOT))['route:ha.gf2.in'].data.drift).toEqual([])
   })
+
+  it('containers e pods na coluna de workload: o correlacionado na linha do seu servico, os outros abaixo', () => {
+    const snap = {
+      nodes: [
+        ...SNAPSHOT.nodes,
+        n('docker:vps/homeassistant', 'CONTAINER', 'vps', 'homeassistant'),
+        n('docker:vps/redis', 'CONTAINER', 'vps', 'redis'),
+        n('k8s:vps/lab/pod/web-1', 'POD', 'vps', 'web-1'),
+      ],
+      edges: [...SNAPSHOT.edges, e('service:vps/homeassistant', 'docker:vps/homeassistant')],
+    }
+    const graph = buildInfraTopology(snap)
+    const g = byId(graph)
+    expect(g['docker:vps/homeassistant'].position.x).toBe(COL.workload + 16)
+    expect(g['docker:vps/homeassistant'].parentId).toBe('group:vps')
+    expect(g['docker:vps/homeassistant'].position.y).toBe(g['service:vps/homeassistant'].position.y)
+    const loose = ['docker:vps/redis', 'k8s:vps/lab/pod/web-1'].map((id) => g[id].position.y)
+    expect(Math.min(...loose)).toBeGreaterThan(g['route:logs.gf2.in'].position.y)
+    expect(loose[0]).not.toBe(loose[1])
+    // a caixa cresce para caber os workloads soltos e a aresta servico->container aparece
+    expect(g['group:vps'].style.height).toBeGreaterThan(byId(buildInfraTopology(SNAPSHOT))['group:vps'].style.height)
+    expect(g['group:vps'].style.width).toBe(COL.workload + 220 + 32)
+    expect(graph.edges.some((x) => x.target === 'docker:vps/homeassistant')).toBe(true)
+  })
 })
+

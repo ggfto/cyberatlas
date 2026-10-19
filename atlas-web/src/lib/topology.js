@@ -2,14 +2,15 @@
  * Monta o grafo do mapa a partir do snapshot do hub (GET /api/topology). Pura, no molde do topology.js do
  * HiveKeeper: devolve `nodes` + `edges` do React Flow com posicao calculada, testavel sem canvas.
  *
- * Colunas (dentro de cada maquina): entrada (tunel/LAN) -> Traefik -> rota -> servico. O Authentik fica fora
+ * Colunas (dentro de cada maquina): entrada (tunel/LAN) -> Traefik -> rota -> servico -> container/pod (F4: o clique
+ * nele abre o log). O Authentik fica fora
  * das maquinas, na coluna dele: a porta de login e uma so, mesmo para o Traefik do host, que chega nela pela
  * internet. Cada maquina e uma caixa (`machineGroup`) com os filhos por `parentId`; a caixa vem antes dos
  * filhos, como o React Flow exige.
  */
 
-export const COL = { entry: 0, traefik: 300, authgate: 600, route: 900, service: 1200 }
-const KIND_COL = { ENTRY: 'entry', TRAEFIK: 'traefik', ROUTE: 'route', SERVICE: 'service' }
+export const COL = { entry: 0, traefik: 300, authgate: 600, route: 900, service: 1200, workload: 1500 }
+const KIND_COL = { ENTRY: 'entry', TRAEFIK: 'traefik', ROUTE: 'route', SERVICE: 'service', CONTAINER: 'workload', POD: 'workload' }
 const NODE_W = 220
 const ROW_H = 90
 const PAD = 16
@@ -54,8 +55,10 @@ export function buildInfraTopology(snapshot) {
 
   const machines = [...new Set(items.filter((t) => t.node.kind === 'MACHINE').map((t) => t.node.machine))].sort()
   const firstRouteOf = new Map()
+  const serviceOf = new Map() // container/pod -> servico que roteia para ele (Correlator)
   for (const e of rawEdges) {
     if (e.kind === 'ROUTES_TO' && e.to.startsWith('service:') && !firstRouteOf.has(e.to)) firstRouteOf.set(e.to, e.from)
+    if (e.kind === 'ROUTES_TO' && e.from.startsWith('service:') && !serviceOf.has(e.to)) serviceOf.set(e.to, e.from)
   }
 
   let y = TOP
@@ -64,7 +67,12 @@ export function buildInfraTopology(snapshot) {
     const of = (kind) => own.filter((t) => t.node.kind === kind).sort((a, b) => a.node.key.localeCompare(b.node.key))
     const routes = of('ROUTE')
     const rowOfRoute = new Map(routes.map((t, i) => [t.node.key, i]))
-    const rows = Math.max(1, routes.length, of('ENTRY').length)
+    const serviceRow = new Map(of('SERVICE').map((t, i) => [t.node.key, rowOfRoute.get(firstRouteOf.get(t.node.key)) ?? i]))
+    const workloads = [...of('CONTAINER'), ...of('POD')]
+    const baseRows = Math.max(1, routes.length, of('ENTRY').length, serviceRow.size)
+    // sem servico correlacionado: abaixo de tudo, um por linha
+    const loose = workloads.filter((t) => !serviceRow.has(serviceOf.get(t.node.key)))
+    const rows = baseRows + loose.length
     const groupId = `group:${m}`
     const at = (col, row) => ({ x: COL[col] + PAD, y: LABEL_H + PAD + row * ROW_H })
 
@@ -74,17 +82,18 @@ export function buildInfraTopology(snapshot) {
       position: { x: 0, y },
       selectable: false,
       draggable: false,
-      style: { width: COL.service + NODE_W + PAD * 2, height: LABEL_H + PAD * 2 + rows * ROW_H },
+      style: { width: COL.workload + NODE_W + PAD * 2, height: LABEL_H + PAD * 2 + rows * ROW_H },
       data: { label: m },
     })
     const inGroup = { parentId: groupId, extent: 'parent' }
     of('ENTRY').forEach((t, i) => children.push(card(t, at('entry', i), inGroup)))
     of('TRAEFIK').forEach((t) => children.push(card(t, at('traefik', (rows - 1) / 2), inGroup)))
     routes.forEach((t, i) => children.push(card(t, at('route', i), inGroup)))
-    of('SERVICE').forEach((t, i) => {
-      const row = rowOfRoute.get(firstRouteOf.get(t.node.key))
-      children.push(card(t, at('service', row ?? i), inGroup))
-    })
+    of('SERVICE').forEach((t) => children.push(card(t, at('service', serviceRow.get(t.node.key)), inGroup)))
+    workloads
+      .filter((t) => !loose.includes(t))
+      .forEach((t) => children.push(card(t, at('workload', serviceRow.get(serviceOf.get(t.node.key))), inGroup)))
+    loose.forEach((t, i) => children.push(card(t, at('workload', baseRows + i), inGroup)))
     y += LABEL_H + PAD * 2 + rows * ROW_H + GROUP_GAP
   }
 

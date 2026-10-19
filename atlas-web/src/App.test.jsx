@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import App from './App.jsx'
 
 class FakeEventSource {
@@ -43,7 +43,7 @@ describe('App', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ nodes: [], edges: [] }) })
     const { container } = render(<App />)
     expect(FakeEventSource.last.url).toBe('/api/topology/stream')
-    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(globalThis.fetch).not.toHaveBeenCalledWith('/api/topology', expect.anything())
     const tn = (key) => ({ node: { key, kind: 'SERVICE', name: key, machine: 'vps', attributes: {} }, status: { state: 'ONLINE' }, drift: [] })
     const count = (n) => screen.getByText((_, el) => el?.textContent === `${n} NÓS`)
     act(() => FakeEventSource.last.emit('snapshot', { nodes: [tn('service:vps/a')], edges: [] }))
@@ -53,5 +53,35 @@ describe('App', () => {
     act(() => FakeEventSource.last.emit('patch', { upsertNodes: [], removeNodes: ['service:vps/a'], upsertEdges: [], removeEdges: [] }))
     expect(count(1)).toBeInTheDocument()
     expect(container).toBeTruthy()
+  })
+
+  it('clique num container abre o painel de log quando os logs estao ligados; em servico nao', async () => {
+    globalThis.EventSource = FakeEventSource
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ['docker:vps/9router'] })
+    render(<App />)
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/logs/targets', expect.anything()))
+    const tn = (key, kind, name) => ({ node: { key, kind, name, machine: 'vps', attributes: {} }, status: { state: 'ONLINE' }, drift: [] })
+    act(() => FakeEventSource.last.emit('snapshot', {
+      nodes: [tn('machine:vps', 'MACHINE', 'vps'), tn('docker:vps/9router', 'CONTAINER', '9router'), tn('service:vps/x', 'SERVICE', 'x')], edges: [],
+    }))
+    await act(async () => {})
+    fireEvent.click(await screen.findByText('x'))
+    expect(screen.queryByTestId('log-panel')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByText('9router'))
+    expect(screen.getByTestId('log-panel')).toBeInTheDocument()
+    expect(FakeEventSource.last.url).toBe('/api/logs/stream?node=docker%3Avps%2F9router&tail=200')
+    fireEvent.click(screen.getByLabelText('fechar 9router'))
+    expect(screen.queryByTestId('log-panel')).not.toBeInTheDocument()
+  })
+
+  it('logs desligados no hub (404): clique em container nao abre nada', async () => {
+    globalThis.EventSource = FakeEventSource
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 404, json: async () => ({}) })
+    render(<App />)
+    const tn = (key, kind, name) => ({ node: { key, kind, name, machine: 'vps', attributes: {} }, status: { state: 'ONLINE' }, drift: [] })
+    act(() => FakeEventSource.last.emit('snapshot', { nodes: [tn('machine:vps', 'MACHINE', 'vps'), tn('docker:vps/9router', 'CONTAINER', '9router')], edges: [] }))
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith('/api/logs/targets', expect.anything()))
+    fireEvent.click(await screen.findByText('9router'))
+    expect(screen.queryByTestId('log-panel')).not.toBeInTheDocument()
   })
 })
