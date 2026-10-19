@@ -93,6 +93,34 @@ class SecurityTest {
         given().auth().oauth2(Tokens.noGroup()).when().get("/api/topology").then().statusCode(403);
     }
 
+    /**
+     * Bug de producao: quem loga antes de ter grupo do atlas fica com uma sessao sem papel (403 em tudo). O /logout
+     * tem que continuar alcancavel por essa sessao, senao a unica saida e apagar cookie. Login de verdade pelo code
+     * flow do wiremock: o token dele vem com groups user,admin (nenhum grupo do atlas).
+     */
+    @Test
+    void sessionWithoutAtlasGroupIsForbiddenButCanStillLogOut() {
+        var cookies = new io.restassured.filter.cookie.CookieFilter();
+        String authorize = given().filter(cookies).redirects().follow(false).accept(ContentType.HTML).when().get("/")
+                .then().statusCode(302).extract().header("Location");
+        var q = java.util.Arrays.stream(java.net.URI.create(authorize).getRawQuery().split("&")).map(p -> p.split("=", 2))
+                .collect(java.util.stream.Collectors.toMap(p -> p[0],
+                        p -> java.net.URLDecoder.decode(p[1], java.nio.charset.StandardCharsets.UTF_8), (a, b) -> a));
+        var idp = java.net.URI.create(authorize);
+        String callback = given().redirects().follow(false).queryParam("state", q.get("state"))
+                .queryParam("redirect_uri", q.get("redirect_uri"))
+                .when().get(idp.getScheme() + "://" + idp.getAuthority() + "/login").then().statusCode(302)
+                .extract().header("Location");
+        given().filter(cookies).redirects().follow(false).accept(ContentType.HTML).when().get(callback).then().statusCode(302);
+
+        given().filter(cookies).redirects().follow(false).accept(ContentType.HTML).when().get("/").then().statusCode(403);
+        given().filter(cookies).redirects().follow(false).when().get("/api/topology").then().statusCode(403);
+
+        String out = given().filter(cookies).redirects().follow(false).accept(ContentType.HTML).when().get("/logout").then()
+                .statusCode(302).extract().header("Location");
+        assertTrue(out.contains("/end-session"), out);
+    }
+
     /** Segunda checagem (design §4): mesmo chamado por fora da rota, o LogService nao abre log para viewer. */
     @Test
     void logServiceChecksTheRoleAgainBeforeAnyLogOpen() {
