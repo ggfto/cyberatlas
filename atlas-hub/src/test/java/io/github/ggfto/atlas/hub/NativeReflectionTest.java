@@ -39,4 +39,15 @@ class NativeReflectionTest {
             assertTrue(r.contains(c), "record sem reflexao no nativo: " + c.getSimpleName());
         }
     }
+
+    /** Corpos JSON da F5 (banco e API do browser): sem reflexao, o nativo devolve {} ou nao le o PATCH. */
+    @Test
+    void f5BodiesAreRegistered() {
+        for (Class<?> c : List.of(io.github.ggfto.atlas.hub.store.AuditLog.Entry.class, io.github.ggfto.atlas.hub.store.LayoutStore.Position.class,
+                io.github.ggfto.atlas.hub.store.StatusHistory.Change.class, io.github.ggfto.atlas.hub.layout.LayoutResource.Move.class,
+                io.github.ggfto.atlas.hub.layout.LayoutResource.BatchItem.class, io.github.ggfto.atlas.hub.layout.LayoutResource.ItemResult.class,
+                io.github.ggfto.atlas.hub.layout.LayoutResource.Conflict.class, io.github.ggfto.atlas.hub.auth.MeResource.Me.class)) {
+            assertTrue(c.isAnnotationPresent(RegisterForReflection.class), "corpo sem reflexao no nativo: " + c.getName());
+        }
+    }
 }
