@@ -93,6 +93,10 @@ class SecurityTest {
     @Test
     void healthStaysOpen() {
         given().when().get("/q/health").then().statusCode(200);
+        // as tres probes do deploy (deploy/kustomize/base/deployment.yaml), sem sessao
+        for (String probe : java.util.List.of("started", "live", "ready")) {
+            given().when().get("/q/health/" + probe).then().statusCode(200);
+        }
     }
 
     @Test

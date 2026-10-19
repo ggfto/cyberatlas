@@ -1,0 +1,20 @@
+# Base do hub do atlas (design §5). So o que e do app; o que e do lugar (namespace, NodePort, digest da imagem,
+# URL do Authentik, Postgres, segredos) vem do overlay no ggfto/infra (k8s/vps/_atlas), que referencia esta
+# pasta por commit:  github.com/ggfto/cyberatlas//deploy/kustomize/base?ref=<sha>
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+labels:
+  - pairs:
+      app.kubernetes.io/name: atlas-hub
+      app.kubernetes.io/part-of: cyberatlas
+    includeSelectors: false
+resources:
+  - serviceaccount.yaml
+  - deployment.yaml
+  - service.yaml
+  - networkpolicy.yaml
+images:
+  # o overlay troca por digest (ghcr.io/ggfto/cyberatlas-hub@sha256:...); a base nunca aponta para latest
+  - name: cyberatlas-hub
+    newName: ghcr.io/ggfto/cyberatlas-hub
+    newTag: definir-no-overlay

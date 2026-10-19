@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: atlas-hub
+spec:
+  # Um so: o estado vivo (sessoes dos edges, follows de log, stream) e em memoria (design §3.1).
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels: {app: atlas-hub}
+  template:
+    metadata:
+      labels: {app: atlas-hub}
+    spec:
+      serviceAccountName: atlas-hub
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: hub
+          image: cyberatlas-hub
+          ports:
+            - {name: http, containerPort: 8080}
+            # TLS: WS mTLS dos edges, enrollment e break-glass. O NodePort dela so pode escutar no wg0.
+            - {name: edge, containerPort: 8443}
+          env:
+            - {name: QUARKUS_HTTP_SSL_PORT, value: "8443"}
+            - {name: ATLAS_EDGES_PORT, value: "8443"}
+            - {name: QUARKUS_TLS_KEY_STORE_PEM_0_CERT, value: /pki/server.crt}
+            - {name: QUARKUS_TLS_KEY_STORE_PEM_0_KEY, value: /pki/server.key}
+            - {name: QUARKUS_TLS_TRUST_STORE_PEM_CERTS, value: /pki/ca.crt}
+            - {name: ATLAS_EDGES_CA_CERT, value: /pki/ca.crt}
+            - {name: ATLAS_EDGES_CA_KEY, value: /pki/ca.key}
+          envFrom:
+            # atlas-config (ConfigMap): URL do Authentik, client-id, JDBC URL, fontes. atlas-secrets (Secret):
+            # senha do banco, client secret, chave do cookie, break-glass, tokens read-only das fontes.
+            - configMapRef: {name: atlas-config}
+            - secretRef: {name: atlas-secrets}
+          volumeMounts:
+            - {name: pki, mountPath: /pki, readOnly: true}
+            - {name: tmp, mountPath: /tmp}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          startupProbe:
+            httpGet: {path: /q/health/started, port: http}
+            periodSeconds: 2
+            failureThreshold: 60
+          livenessProbe:
+            httpGet: {path: /q/health/live, port: http}
+            periodSeconds: 20
+          readinessProbe:
+            httpGet: {path: /q/health/ready, port: http}
+            periodSeconds: 10
+          resources:
+            requests: {cpu: 50m, memory: 96Mi}
+            limits: {memory: 256Mi}
+      volumes:
+        - name: pki
+          secret:
+            secretName: atlas-pki
+            defaultMode: 0400
+        - name: tmp
+          emptyDir: {sizeLimit: 64Mi}
