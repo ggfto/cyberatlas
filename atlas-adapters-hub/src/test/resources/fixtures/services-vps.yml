@@ -1,0 +1,46 @@
+# Fixture SANITIZADO de vps/services.yml (ggfto/infra), so para teste.
+# Sem comentarios do original; lan_ip/public_ip/tunnel_id trocados por valores de documentacao
+# (RFC 5737 e UUID zero), mantidos de proposito: o teste prova que nao chegam ao payload.
+zone: gf2.in
+public_ip: 198.51.100.20
+tunnel_id: 00000000-0000-0000-0000-00000000bbbb
+managed_by: gerenciado por vps/services.yml
+services:
+  homeassistant:
+    subdomain: ha
+    backend: http://homeassistant:8123
+    exposure: externo
+    auth: false
+  9router:
+    subdomain: 9router
+    backend: http://9router:20128
+    exposure: externo
+    auth: false
+  freellmapi:
+    subdomain: llm
+    backend: http://freellmapi:3001
+    exposure: externo
+    auth: true
+    auth_bypass_paths:
+    - /v1/
+    - /v1beta/
+  dozzle:
+    subdomain: logs
+    backend: http://dozzle-dozzle-1:8080
+    exposure: externo
+    auth: true
+  portainer:
+    subdomain: docker
+    backend: http://portainer:9000
+    exposure: externo
+    auth: true
+  argocd:
+    subdomain: argocd
+    backend: http://host.docker.internal:30080
+    exposure: externo
+    auth: false
+  dozzle-k8s:
+    subdomain: logs-k8s
+    backend: http://host.docker.internal:30081
+    exposure: externo
+    auth: true

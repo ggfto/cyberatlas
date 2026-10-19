@@ -1,0 +1,5 @@
+[
+  {"loadBalancer": {"servers": [{"url": "http://dozzle-dozzle-1:8080"}]}, "status": "enabled", "serverStatus": {"http://dozzle-dozzle-1:8080": "UP"}, "name": "dozzle@file", "provider": "file"},
+  {"loadBalancer": {"servers": [{"url": "http://homeassistant:8123"}, {"url": "http://homeassistant-2:8123"}]}, "status": "enabled", "serverStatus": {"http://homeassistant:8123": "UP", "http://homeassistant-2:8123": "DOWN"}, "name": "ha@file", "provider": "file"},
+  {"loadBalancer": {"servers": [{"url": "http://semhc:80"}]}, "status": "enabled", "name": "semhc@file", "provider": "file"}
+]

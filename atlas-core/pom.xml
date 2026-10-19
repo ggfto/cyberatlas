@@ -13,4 +13,29 @@
   <name>atlas-core</name>
   <description>Modelo (no, aresta, estado, fragmento), SPI TopologySource/LogSource e merge puro. So JDK.</description>
 
+  <dependencies>
+    <!-- regex de tempo linear (sem ReDoS) para redacao e, na F4, para o filtro de log do usuario -->
+    <dependency>
+      <groupId>com.google.re2j</groupId>
+      <artifactId>re2j</artifactId>
+      <version>1.8</version>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- so teste: certificado de servidor com validade curta para o check de vencimento -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcpkix-jdk18on</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
 </project>

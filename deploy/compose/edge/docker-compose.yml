@@ -1,0 +1,65 @@
+# atlas edge numa maquina (design §5): container Docker, FORA do k3s (se o k3s cair, o edge ve o Docker e reporta).
+# O edge nao abre porta nenhuma: so disca para o hub na 8443 (pelo WG no host; pelo docker0 na VPS).
+# O Docker so e lido pelo socket-proxy, numa rede interna sem saida e sem porta publicada, com allowlist por regex
+# igual a do DockerClient (listagem, eventos, logs). Inspect (que traz Env) nao passa nem no proxy.
+name: atlas-edge
+
+services:
+  socket-proxy:
+    image: wollomatic/socket-proxy:1.13.1
+    restart: unless-stopped
+    # 65534 = nobody; o grupo e o do docker.sock da maquina (getent group docker)
+    user: "65534:${DOCKER_GID:?defina DOCKER_GID no .env}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 32m
+    command:
+      - '-loglevel=info'
+      - '-listenip=0.0.0.0'
+      - '-allowfrom=atlas-edge'
+      - '-allowGET=^/(v1\.[0-9]{1,2}/)?(containers/json|events|containers/[a-f0-9]{12,64}/logs)$'
+      - '-watchdoginterval=600'
+      - '-stoponwatchdog'
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker-ro]
+
+  atlas-edge:
+    image: ${ATLAS_EDGE_IMAGE:?defina ATLAS_EDGE_IMAGE (por digest) no .env}
+    container_name: atlas-edge
+    hostname: atlas-edge
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 192m
+    depends_on: [socket-proxy]
+    environment:
+      ATLAS_EDGE_MACHINE: ${ATLAS_EDGE_MACHINE:?host ou vps}
+      ATLAS_EDGE_HUB: ${ATLAS_EDGE_HUB:?https://<ip>:<nodeport da 8443>}
+      ATLAS_EDGE_CA_FILE: /etc/atlas/ca.crt
+      # So no primeiro start (depois a credencial fica em /var/lib/atlas-edge); apague do .env depois do enrollment.
+      ATLAS_EDGE_TOKEN: ${ATLAS_EDGE_TOKEN:-}
+      ATLAS_EDGE_DOCKER: tcp://socket-proxy:2375
+      ATLAS_EDGE_TRAEFIK: ${ATLAS_EDGE_TRAEFIK:-}
+      ATLAS_EDGE_KUBERNETES: ${ATLAS_EDGE_KUBERNETES:-false}
+      KUBECONFIG: /etc/atlas/kubeconfig
+    volumes:
+      - ./ca.crt:/etc/atlas/ca.crt:ro
+      # kubeconfig da SA atlas-edge (so leitura; ver k8s/<cluster>/_atlas-edge no infra). Sem k8s: arquivo vazio.
+      - ${ATLAS_EDGE_KUBECONFIG:-./kubeconfig}:/etc/atlas/kubeconfig:ro
+      - state:/var/lib/atlas-edge
+    tmpfs:
+      - /tmp:size=16m
+    # docker-ro: so o proxy. default: saida para o hub (e para o Traefik da maquina, se ATLAS_EDGE_TRAEFIK).
+    networks: [docker-ro, default]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  state:
+
+networks:
+  docker-ro:
+    internal: true

@@ -1,0 +1,11 @@
+[
+  {"Id": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2", "Names": ["/9router"], "Image": "ghcr.io/ggfto/9router:sha-abc",
+   "State": "running", "Status": "Up 2 hours (healthy)", "Command": "node server.js --token segredo",
+   "Labels": {"com.docker.compose.project": "9router", "com.docker.compose.service": "9router", "traefik.http.middlewares.a.basicauth.users": "admin:$apr1$hash"}},
+  {"Id": "b1b2c3d4e5f6", "Names": ["/authentik-worker-1"], "Image": "ghcr.io/goauthentik/server:2025.2.4",
+   "State": "running", "Status": "Up 4 weeks (unhealthy)", "Labels": {"com.docker.compose.project": "authentik", "com.docker.compose.service": "worker"}},
+  {"Id": "c1b2c3d4e5f6", "Names": ["/registronic"], "Image": "registronic:latest", "State": "exited", "Status": "Exited (1) 3 hours ago", "Labels": {}},
+  {"Id": "d1b2c3d4e5f6", "Names": ["/mosquitto"], "Image": "eclipse-mosquitto:2", "State": "restarting", "Status": "Restarting (1) 5 seconds ago", "Labels": null},
+  {"Id": "e1b2c3d4e5f6", "Names": ["/novo"], "Image": "x:1", "State": "running", "Status": "Up 5 seconds (health: starting)", "Labels": {}},
+  {"Id": "f1b2c3d4e5f6", "Names": ["/criado"], "Image": "x:1", "State": "created", "Status": "Created", "Labels": {}}
+]

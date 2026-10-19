@@ -1,0 +1,26 @@
+# Entrada: so as duas portas do hub. Saida: DNS, o Postgres do namespace e HTTPS (Authentik, Cloudflare,
+# Argo, checks de rota). Nada de saida para outras portas.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlas-hub
+spec:
+  podSelector:
+    matchLabels: {app: atlas-hub}
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - ports:
+        - {port: 8080, protocol: TCP}
+        - {port: 8443, protocol: TCP}
+  egress:
+    - ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    - to:
+        - podSelector:
+            matchLabels: {app: atlas-db}
+      ports:
+        - {port: 5432, protocol: TCP}
+    - ports:
+        - {port: 443, protocol: TCP}
+        - {port: 80, protocol: TCP}

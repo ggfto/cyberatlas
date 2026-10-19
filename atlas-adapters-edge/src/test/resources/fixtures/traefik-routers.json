@@ -1,0 +1,7 @@
+[
+  {"entryPoints": ["websecure"], "middlewares": ["authentik@file"], "service": "dozzle@file", "rule": "Host(`logs.gf2.in`)", "status": "enabled", "using": ["websecure"], "name": "dozzle@file", "provider": "file"},
+  {"entryPoints": ["websecure"], "service": "ha@file", "rule": "Host(`ha.gf2.in`) || Host(`ha2.gf2.in`)", "status": "enabled", "name": "ha@file", "provider": "file"},
+  {"entryPoints": ["websecure"], "service": "quebrado@file", "rule": "Host(`quebrado.gf2.in`)", "status": "disabled", "error": ["the service \"quebrado@file\" does not exist"], "name": "quebrado@file", "provider": "file"},
+  {"entryPoints": ["websecure"], "service": "semhc@file", "rule": "Host(`semhc.gf2.in`)", "status": "enabled", "name": "semhc@file", "provider": "file"},
+  {"entryPoints": ["traefik"], "service": "api@internal", "rule": "PathPrefix(`/api`)", "status": "enabled", "name": "api@internal", "provider": "internal"}
+]
