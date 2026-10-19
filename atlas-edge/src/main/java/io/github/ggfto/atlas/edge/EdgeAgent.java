@@ -2,11 +2,15 @@ package io.github.ggfto.atlas.edge;
 
 import io.fabric8.kubernetes.client.KubernetesClient;
 import io.github.ggfto.atlas.adapters.edge.DockerClient;
+import io.github.ggfto.atlas.adapters.edge.DockerLogSource;
+import io.github.ggfto.atlas.adapters.edge.KubernetesLogSource;
 import io.github.ggfto.atlas.adapters.edge.DockerSource;
 import io.github.ggfto.atlas.adapters.edge.KubernetesSource;
 import io.github.ggfto.atlas.adapters.edge.LocalChecks;
 import io.github.ggfto.atlas.adapters.edge.TraefikSource;
 import io.github.ggfto.atlas.core.Expectation;
+import io.github.ggfto.atlas.core.LogSource;
+import io.github.ggfto.atlas.core.Redactor;
 import io.github.ggfto.atlas.core.TopologySource;
 import io.github.ggfto.atlas.protocol.Backoff;
 import io.github.ggfto.atlas.protocol.EdgeCredentials;
@@ -68,6 +72,7 @@ public class EdgeAgent {
             URI hub = URI.create(config.hub().get());
             URI ws = URI.create("wss://" + hub.getAuthority() + "/edge/v1");
             SnapshotPump pump = new SnapshotPump(() -> withChecks(sources), f -> link.send(f));
+            EdgeLogs logs = new EdgeLogs(logSources(), f -> link.send(f), Redactor.DEFAULT, 20, 2000, 200, 64 * 1024);
             link = new EdgeLink(ws, creds.sslContext(),
                     () -> new Frame.Hello(edgeId, ProtocolVersion.CURRENT, config.machine().get(),
                             sources.stream().map(TopologySource::name).toList(), Map.of()),
@@ -77,6 +82,22 @@ public class EdgeAgent {
                             checks = w.checks().stream().map(EdgeAgent::target).toList();
                             ttl = Duration.ofMillis(w.ttlMs());
                             reschedule(pump, Duration.ofMillis(w.collectEveryMs()));
+                        }
+
+                        public void onLogOpen(Frame.LogOpen o) {
+                            logs.open(o);
+                        }
+
+                        public void onCredit(Frame.Credit c) {
+                            logs.credit(c);
+                        }
+
+                        public void onLogClose(Frame.LogClose c) {
+                            logs.close(c);
+                        }
+
+                        public void onDisconnect() {
+                            logs.closeAll();
                         }
                     });
             link.start();
@@ -117,6 +138,16 @@ public class EdgeAgent {
         config.traefik().ifPresent(t -> out.add(new TraefikSource(m, URI.create(t), config.timeout(), clock, ttl)));
         if (config.kubernetes()) {
             out.add(new KubernetesSource(m, kubernetes.get(), clock, ttl));
+        }
+        return out;
+    }
+
+    private List<LogSource> logSources() {
+        String m = config.machine().get();
+        List<LogSource> out = new ArrayList<>();
+        config.docker().ifPresent(d -> out.add(new DockerLogSource(m, DockerClient.of(URI.create(d), config.timeout()))));
+        if (config.kubernetes()) {
+            out.add(new KubernetesLogSource(m, kubernetes.get()));
         }
         return out;
     }

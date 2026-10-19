@@ -32,6 +32,20 @@ public final class EdgeLink implements AutoCloseable {
 
         default void onResync(String source) {
         }
+
+        /** hub abriu um follow de log. */
+        default void onLogOpen(Frame.LogOpen open) {
+        }
+
+        default void onCredit(Frame.Credit credit) {
+        }
+
+        default void onLogClose(Frame.LogClose close) {
+        }
+
+        /** Sessao caiu (antes de reconectar): follows abertos devem parar. */
+        default void onDisconnect() {
+        }
     }
 
     private final URI uri;
@@ -120,6 +134,7 @@ public final class EdgeLink implements AutoCloseable {
         WebSocket w = ws;
         ws = null;
         sessionId = null;
+        handler.onDisconnect();
         if (w != null) {
             w.abort();
         }
@@ -188,6 +203,9 @@ public final class EdgeLink implements AutoCloseable {
                     scheduleReconnect(rejectDelay);
                 }
                 case Frame.Resync r -> handler.onResync(r.source());
+                case Frame.LogOpen o -> handler.onLogOpen(o);
+                case Frame.Credit c -> handler.onCredit(c);
+                case Frame.LogClose c -> handler.onLogClose(c);
                 case Frame.Heartbeat h -> {
                 }
                 default -> {
@@ -202,6 +220,7 @@ public final class EdgeLink implements AutoCloseable {
             if (webSocket == ws) {
                 ws = null;
                 sessionId = null;
+                handler.onDisconnect();
                 scheduleReconnect(backoff.delay(attempt.incrementAndGet()));
             }
             return null;
@@ -212,6 +231,7 @@ public final class EdgeLink implements AutoCloseable {
             if (webSocket == ws) {
                 ws = null;
                 sessionId = null;
+                handler.onDisconnect();
                 scheduleReconnect(backoff.delay(attempt.incrementAndGet()));
             }
         }
