@@ -30,11 +30,10 @@ spec:
             # TLS: WS mTLS dos edges, enrollment e break-glass. O NodePort dela so pode escutar no wg0.
             - {name: edge, containerPort: 8443}
           env:
+            # Cert/chave da porta TLS (/pki/server.*) e a CA de confianca estao no application.properties (%prod):
+            # pem.0 e chave de mapa e nao mapeia so pelo env. Aqui, so o que nao e mapa.
             - {name: QUARKUS_HTTP_SSL_PORT, value: "8443"}
             - {name: ATLAS_EDGES_PORT, value: "8443"}
-            - {name: QUARKUS_TLS_KEY_STORE_PEM_0_CERT, value: /pki/server.crt}
-            - {name: QUARKUS_TLS_KEY_STORE_PEM_0_KEY, value: /pki/server.key}
-            - {name: QUARKUS_TLS_TRUST_STORE_PEM_CERTS, value: /pki/ca.crt}
             - {name: ATLAS_EDGES_CA_CERT, value: /pki/ca.crt}
             - {name: ATLAS_EDGES_CA_KEY, value: /pki/ca.key}
           envFrom:
