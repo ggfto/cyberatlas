@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.hub.edge;
 
+import io.github.ggfto.atlas.hub.auth.CsrfExempt;
 import io.github.ggfto.atlas.hub.store.AuditLog;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
@@ -11,8 +12,9 @@ import java.util.Map;
 
 /**
  * Enrollment do edge (so na porta de edge, pela EdgePortPolicy): token de uso unico + CSR no corpo; devolve o
- * certificado assinado pela CA do atlas e a propria CA.
+ * certificado assinado pela CA do atlas e a propria CA. Isento do anti-CSRF: nao ha cookie aqui, quem prova e o token.
  */
+@CsrfExempt
 @Path("/api/enrollments")
 public class EnrollmentResource {
 
