@@ -2,7 +2,10 @@ package io.github.ggfto.atlas.hub.logs;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.ggfto.atlas.hub.auth.Roles;
+import io.quarkus.security.identity.SecurityIdentity;
 import io.smallrye.mutiny.Multi;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.ws.rs.DefaultValue;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.NotFoundException;
@@ -22,24 +25,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Log ao vivo por SSE (design §3.4): {@code event: line} (LogLine), {@code dropped} ({@code {"n":..}}) e
- * {@code end} ({@code {"reason":..}}), mais um comentario a cada 20 s. So existe com {@code atlas.logs.enabled};
- * na F5 passa a exigir o papel atlas-admins (ate la, todos os pedidos contam como o mesmo usuario no limite).
+ * {@code end} ({@code {"reason":..}}), mais um comentario a cada 20 s. So atlas-admins (permissao por caminho e
+ * {@code @RolesAllowed}, e de novo no LogService); o limite de streams conta por usuario logado.
  */
 @Path("/api/logs")
 public class LogResource {
 
     static final Duration HEARTBEAT = Duration.ofSeconds(20);
-    static final String ANON = "anon";
 
     private final LogService logs;
     private final ObjectMapper json;
+    private final SecurityIdentity identity;
 
-    LogResource(LogService logs, ObjectMapper json) {
+    LogResource(LogService logs, ObjectMapper json, SecurityIdentity identity) {
         this.logs = logs;
         this.json = json;
+        this.identity = identity;
     }
 
     @GET
+    @RolesAllowed(Roles.ADMIN)
     @Path("/targets")
     @Produces(MediaType.APPLICATION_JSON)
     public List<String> targets() {
@@ -50,6 +55,7 @@ public class LogResource {
     }
 
     @GET
+    @RolesAllowed(Roles.ADMIN)
     @Path("/stream")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     public Multi<OutboundSseEvent> stream(@QueryParam("node") String node, @QueryParam("container") String container,
@@ -63,7 +69,7 @@ public class LogResource {
         }
         Multi<LogHub.LogEvent> events;
         try {
-            events = logs.open(node, container, tail, filter, regex, ANON);
+            events = logs.open(node, container, tail, filter, regex, identity);
         } catch (LogService.BadTarget | IllegalArgumentException e) {
             throw error(400, e.getMessage());
         } catch (LogService.EdgeOffline e) {

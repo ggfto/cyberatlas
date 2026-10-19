@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.hub.edge;
 
+import io.github.ggfto.atlas.hub.Tokens;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.hasItem;
@@ -48,7 +49,7 @@ class EdgeEndToEndTest {
     static final URI WS = URI.create("wss://localhost:" + EdgePkiProfile.EDGE_PORT + "/edge/v1");
 
     static String newEdge(String machine) {
-        return given().contentType(ContentType.JSON).body(Map.of("machine", machine))
+        return given().auth().oauth2(Tokens.admin()).contentType(ContentType.JSON).body(Map.of("machine", machine))
                 .when().post("/api/edges").then().statusCode(201).body("edgeId", is("edge-" + machine))
                 .extract().path("token");
     }
@@ -93,10 +94,10 @@ class EdgeEndToEndTest {
                     List.of(), List.of(new Observation("docker:vps/9router", "docker", State.ONLINE, "Up 2 hours", now, Duration.ofSeconds(90)),
                             new Observation("route:fx.local.gf2.in", "docker", State.OFFLINE, "mentira de outra maquina", now, Duration.ofSeconds(90))));
             assertTrue(link.send(new Frame.Snapshot("docker", 1, docker)));
-            awaitTopology(() -> given().when().get("/api/topology").then().statusCode(200)
+            awaitTopology(() -> given().auth().oauth2(Tokens.viewer()).when().get("/api/topology").then().statusCode(200)
                     .body("nodes.find { it.node.key == 'docker:vps/9router' }.status.state", is("ONLINE"))
                     .body("edges.id", hasItem("routes_to:service:vps/9router->docker:vps/9router")));
-            given().when().get("/api/topology").then()
+            given().auth().oauth2(Tokens.viewer()).when().get("/api/topology").then()
                     .body("nodes.node.key", not(hasItem("docker:host/intruso")))
                     .body("nodes.find { it.node.key == 'route:fx.local.gf2.in' }.status.reason", is("sem fonte"));
         }
@@ -141,7 +142,7 @@ class EdgeEndToEndTest {
     @Test
     void revokedEdgeCannotConnect() throws Exception {
         EdgeCredentials creds = enroll("lab-revogado");
-        given().when().post("/api/edges/edge-lab-revogado/revoke").then().statusCode(204);
+        given().auth().oauth2(Tokens.admin()).when().post("/api/edges/edge-lab-revogado/revoke").then().statusCode(204);
         Session s = connect(creds.sslContext(), "edge-lab-revogado", "lab-revogado", ProtocolVersion.CURRENT);
         try (EdgeLink link = s.link()) {
             assertEquals(null, s.frames().poll(3, TimeUnit.SECONDS), "revogado nao recebe Welcome");
@@ -163,7 +164,7 @@ class EdgeEndToEndTest {
     @Test
     void adminIsOffByDefaultElsewhere() {
         // o admin so liga com atlas.edges.admin-enabled (ate a F5 trazer login); aqui ligado, entao responde
-        given().contentType(ContentType.JSON).body(Map.of("machine", "../x")).when().post("/api/edges").then().statusCode(400);
+        given().auth().oauth2(Tokens.admin()).contentType(ContentType.JSON).body(Map.of("machine", "../x")).when().post("/api/edges").then().statusCode(400);
     }
 
     static void awaitTopology(Runnable assertion) throws InterruptedException {

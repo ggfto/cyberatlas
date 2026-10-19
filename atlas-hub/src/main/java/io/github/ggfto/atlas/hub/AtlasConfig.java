@@ -25,9 +25,21 @@ public interface AtlasConfig {
 
     Logs logs();
 
+    Breakglass breakglass();
+
+    /**
+     * Login local para quando o Authentik cair (design §4): usuario unico, hash bcrypt do cofre via Secret. So vale
+     * na porta TLS de edge (8443, so WG/cluster); sem os dois, nao existe.
+     */
+    interface Breakglass {
+        Optional<String> user();
+
+        Optional<String> bcrypt();
+    }
+
     interface Logs {
-        /** Log ao vivo. Desligado ate a F5 trazer login e o papel atlas-admins: log pode conter segredo. */
-        @WithDefault("false")
+        /** Chave de desligar o log ao vivo (so atlas-admins abre log; viewer leva 403). */
+        @WithDefault("true")
         boolean enabled();
 
         @WithDefault("4")
@@ -96,8 +108,8 @@ public interface AtlasConfig {
         @WithDefault("8443")
         int port();
 
-        /** Criar/revogar edge por API. Desligado ate a F5 trazer login (OIDC + papel atlas-admins). */
-        @WithDefault("false")
+        /** Chave de desligar o admin de edges por API (so atlas-admins chega nele). */
+        @WithDefault("true")
         boolean adminEnabled();
     }
 

@@ -42,8 +42,12 @@ public class TopologyStreamTest {
     TopologyStream streams;
 
     public static BlockingQueue<Event> open(URI uri, String lastEventId) {
+        return open(uri, lastEventId, Tokens.viewer());
+    }
+
+    public static BlockingQueue<Event> open(URI uri, String lastEventId, String token) {
         BlockingQueue<Event> events = new LinkedBlockingQueue<>();
-        HttpRequest.Builder b = HttpRequest.newBuilder(uri).header("Accept", "text/event-stream");
+        HttpRequest.Builder b = HttpRequest.newBuilder(uri).header("Accept", "text/event-stream").header("Authorization", "Bearer " + token);
         if (lastEventId != null) {
             b.header("Last-Event-ID", lastEventId);
         }

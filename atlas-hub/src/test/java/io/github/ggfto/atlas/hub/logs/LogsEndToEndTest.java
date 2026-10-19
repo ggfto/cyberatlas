@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.hub.logs;
 
+import io.github.ggfto.atlas.hub.Tokens;
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -82,7 +83,7 @@ class LogsEndToEndTest {
     }
 
     static EdgeCredentials enroll(String machine) throws Exception {
-        String token = given().contentType(ContentType.JSON).body(Map.of("machine", machine)).when().post("/api/edges").then()
+        String token = given().auth().oauth2(Tokens.admin()).contentType(ContentType.JSON).body(Map.of("machine", machine)).when().post("/api/edges").then()
                 .statusCode(201).extract().path("token");
         return EnrollmentClient.enroll(EDGE, token, Files.readString(EdgePkiProfileAccess.ca()), Duration.ofSeconds(5));
     }
@@ -100,8 +101,8 @@ class LogsEndToEndTest {
             container(link, "lab-logs", "app");
             Thread.sleep(300);
             URI uri = URI.create(logs + "?node=docker:lab-logs/app&tail=50");
-            BlockingQueue<TopologyStreamTest.Event> a = TopologyStreamTest.open(uri, null);
-            BlockingQueue<TopologyStreamTest.Event> b = TopologyStreamTest.open(URI.create(uri + "&filter=normal"), null);
+            BlockingQueue<TopologyStreamTest.Event> a = TopologyStreamTest.open(uri, null, Tokens.admin());
+            BlockingQueue<TopologyStreamTest.Event> b = TopologyStreamTest.open(URI.create(uri + "&filter=normal"), null, Tokens.admin());
             TopologyStreamTest.Event first = a.poll(10, TimeUnit.SECONDS);
             assertEquals("line", first.name());
             assertTrue(first.data().contains("token=[redacted:kv]"), first.data());
@@ -119,7 +120,7 @@ class LogsEndToEndTest {
         assertTrue(edge.welcome.poll(10, TimeUnit.SECONDS) != null);
         container(link, "lab-cai", "app");
         Thread.sleep(300);
-        BlockingQueue<TopologyStreamTest.Event> s = TopologyStreamTest.open(URI.create(logs + "?node=docker:lab-cai/app"), null);
+        BlockingQueue<TopologyStreamTest.Event> s = TopologyStreamTest.open(URI.create(logs + "?node=docker:lab-cai/app"), null, Tokens.admin());
         assertEquals("line", s.poll(10, TimeUnit.SECONDS).name());
         link.close();
         TopologyStreamTest.Event end = null;
@@ -129,14 +130,14 @@ class LogsEndToEndTest {
         assertEquals("end", end.name());
         assertTrue(end.data().contains("edge desconectado"), end.data());
         // e depois disso o alvo existe no mapa, mas o edge nao: 503
-        given().when().get("/api/logs/stream?node=docker:lab-cai/app").then().statusCode(503);
+        given().auth().oauth2(Tokens.admin()).when().get("/api/logs/stream?node=docker:lab-cai/app").then().statusCode(503);
     }
 
     @Test
     void badRequestsAreRefusedBeforeTouchingAnEdge() {
-        given().when().get("/api/logs/stream?node=docker:nao/existe").then().statusCode(400);
-        given().when().get("/api/logs/stream?node=route:ha.gf2.in").then().statusCode(400);
-        given().when().get("/api/logs/stream").then().statusCode(400);
+        given().auth().oauth2(Tokens.admin()).when().get("/api/logs/stream?node=docker:nao/existe").then().statusCode(400);
+        given().auth().oauth2(Tokens.admin()).when().get("/api/logs/stream?node=route:ha.gf2.in").then().statusCode(400);
+        given().auth().oauth2(Tokens.admin()).when().get("/api/logs/stream").then().statusCode(400);
     }
 
     static String textOf(String json) {

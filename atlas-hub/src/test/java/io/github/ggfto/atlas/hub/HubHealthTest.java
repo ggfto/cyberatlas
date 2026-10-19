@@ -22,7 +22,7 @@ class HubHealthTest {
     @Test
     void servesTheWebBundle() {
         // o index do Vite chega pelo Quinoa, com a CSP de producao injetada no build
-        given().when().get("/").then().statusCode(200)
+        given().auth().oauth2(Tokens.viewer()).when().get("/").then().statusCode(200)
                 .body(containsString("<div id=\"root\"></div>"))
                 .body(containsString("Content-Security-Policy"));
     }

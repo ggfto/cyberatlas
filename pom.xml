@@ -104,6 +104,8 @@
           <version>${surefire-plugin.version}</version>
           <configuration>
             <systemPropertyVariables>
+              <!-- temporarios dos testes (PKI de teste, etc.) no target, nunca no /tmp do host -->
+              <java.io.tmpdir>${project.build.directory}</java.io.tmpdir>
               <java.util.logging.manager>org.jboss.logmanager.LogManager</java.util.logging.manager>
             </systemPropertyVariables>
           </configuration>

@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.hub.edge;
 
+import io.github.ggfto.atlas.hub.store.AuditLog;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
@@ -19,9 +20,11 @@ public class EnrollmentResource {
     }
 
     private final EdgeHub hub;
+    private final AuditLog audit;
 
-    EnrollmentResource(EdgeHub hub) {
+    EnrollmentResource(EdgeHub hub, AuditLog audit) {
         this.hub = hub;
+        this.audit = audit;
     }
 
     @POST
@@ -33,8 +36,10 @@ public class EnrollmentResource {
         }
         try {
             EnrollmentService.Issued i = hub.enrollment().get().enroll(body == null ? null : body.token(), body == null ? "" : body.csr());
+            audit.record(i.edgeId(), "enrollment", i.edgeId());
             return Response.ok(Map.of("edgeId", i.edgeId(), "certificatePem", i.certificatePem(), "caPem", i.caPem())).build();
         } catch (EnrollmentException e) {
+            audit.record("anonimo", "enrollment-recusado", e.getMessage());
             return Response.status(403).entity(Map.of("error", e.getMessage())).build();
         }
     }

@@ -18,7 +18,7 @@ class SourcesTest {
 
     @Test
     void tunnelGivesTheStateOfTheMachineEntry() {
-        given().when().get("/api/topology").then().statusCode(200)
+        given().auth().oauth2(Tokens.viewer()).when().get("/api/topology").then().statusCode(200)
                 .body("nodes.find { it.node.key == 'entry:vps/tunel' }.status.state", is("ONLINE"))
                 .body("nodes.find { it.node.key == 'entry:host/tunel' }.status.state", is("OFFLINE"))
                 .body("nodes.find { it.node.key == 'cf-tunnel:vps-tunel' }.node.attributes.connections", is("2"))
@@ -27,7 +27,7 @@ class SourcesTest {
 
     @Test
     void driftFromDnsAndArgoShowsUp() {
-        given().when().get("/api/topology").then().statusCode(200)
+        given().auth().oauth2(Tokens.viewer()).when().get("/api/topology").then().statusCode(200)
                 .body("nodes.find { it.node.key == 'dns:orfao.gf2.in' }.drift", hasItem("dns-sem-servico"))
                 .body("nodes.find { it.node.key == 'route:logs.gf2.in' }.drift", hasItem("servico-sem-dns"))
                 .body("nodes.find { it.node.key == 'argo:vps-dozzle' }.drift", hasItem("outofsync"))
@@ -36,7 +36,7 @@ class SourcesTest {
 
     @Test
     void payloadCarriesNoIpIdOrToken() {
-        String json = given().when().get("/api/topology").then().statusCode(200).extract().asString();
+        String json = given().auth().oauth2(Tokens.viewer()).when().get("/api/topology").then().statusCode(200).extract().asString();
         for (String leak : new String[] {"198.51.100.77", SourcesProfile.ZONE_ID, SourcesProfile.ACCOUNT, SourcesProfile.T_VPS,
                 SourcesProfile.T_HOST, SourcesProfile.CF_TOKEN, SourcesProfile.ARGO_TOKEN, "kubernetes.default.svc", "cfargotunnel"}) {
             assertFalse(json.contains(leak), "payload vazou " + leak);

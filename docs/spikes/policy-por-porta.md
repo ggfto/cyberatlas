@@ -33,3 +33,9 @@ requisição chegou? Se consegue, o mesmo processo do hub atende duas coisas:
 
 ## Plano B (não necessário)
 Seria um segundo processo/Service só para break-glass. Descartado: o spike mostra que um processo basta.
+
+## F5: virou codigo
+O codigo do spike saiu do repo. O login local de break-glass agora mora no `AtlasAuthMechanism` (Basic so na porta
+TLS de edge; em qualquer outra porta falha na hora e a porta publica nunca anuncia Basic), e o `SecurityTest` cobre
+o que o spike provava, mais o achado acima: `httpPermissionFromConfigIsActive` falha se as permissoes da config
+deixarem de valer.

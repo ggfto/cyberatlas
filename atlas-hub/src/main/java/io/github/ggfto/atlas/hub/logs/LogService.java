@@ -5,6 +5,10 @@ import io.github.ggfto.atlas.core.Redactor;
 import io.github.ggfto.atlas.core.TopologyNode;
 import io.github.ggfto.atlas.hub.AtlasConfig;
 import io.github.ggfto.atlas.hub.TopologyService;
+import io.github.ggfto.atlas.hub.auth.Roles;
+import io.github.ggfto.atlas.hub.store.AuditLog;
+import io.quarkus.security.ForbiddenException;
+import io.quarkus.security.identity.SecurityIdentity;
 import io.github.ggfto.atlas.hub.edge.EdgeHub;
 import io.github.ggfto.atlas.protocol.Frame;
 import io.github.ggfto.atlas.protocol.FrameCodec;
@@ -46,8 +50,10 @@ public class LogService {
     private final TopologyService topology;
     private final OpenConnections connections;
     private final LogHub hub;
+    private final AuditLog audit;
 
-    LogService(AtlasConfig config, EdgeHub edges, TopologyService topology, OpenConnections connections) {
+    LogService(AtlasConfig config, EdgeHub edges, TopologyService topology, OpenConnections connections, AuditLog audit) {
+        this.audit = audit;
         AtlasConfig.Logs c = config.logs();
         this.enabled = c.enabled();
         this.edges = edges;
@@ -61,7 +67,15 @@ public class LogService {
         return enabled;
     }
 
-    public Multi<LogHub.LogEvent> open(String nodeKey, String container, int tail, String filter, boolean regex, String user) {
+    /**
+     * Abre (ou entra em) um follow. O papel e conferido de novo aqui, antes de qualquer LogOpen ir ao edge (design
+     * §4): a rota ja exige atlas-admins, mas um caminho novo que chame isto sem a rota nao vaza log.
+     */
+    public Multi<LogHub.LogEvent> open(String nodeKey, String container, int tail, String filter, boolean regex, SecurityIdentity who) {
+        if (who == null || who.isAnonymous() || !who.hasRole(Roles.ADMIN)) {
+            throw new ForbiddenException("log so para " + Roles.ADMIN);
+        }
+        String user = who.getPrincipal().getName();
         TopologyNode target = topology.snapshot().nodes().stream()
                 .filter(n -> n.node().key().equals(nodeKey) && WITH_LOGS.contains(n.node().kind()))
                 .findFirst().orElseThrow(() -> new BadTarget("alvo sem log: " + nodeKey));
@@ -69,7 +83,9 @@ public class LogService {
         if (edges.registry().session(edgeId).isEmpty()) {
             throw new EdgeOffline("edge da maquina " + target.node().machine() + " desconectado");
         }
-        return hub.open(edgeId, nodeKey, container, tail, filter, regex, user);
+        Multi<LogHub.LogEvent> events = hub.open(edgeId, nodeKey, container, tail, filter, regex, user);
+        audit.record(user, "log-aberto", nodeKey);
+        return events;
     }
 
     /** Containers e pods cujo edge esta conectado agora. */
