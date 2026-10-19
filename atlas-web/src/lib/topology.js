@@ -40,6 +40,7 @@ function card(tn, position, extra = {}) {
       attributes: node.attributes || {},
       state: stateOf(status),
       reason: status?.reason || '',
+      drift: tn.drift || [],
     },
   }
 }

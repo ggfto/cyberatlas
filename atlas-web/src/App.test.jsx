@@ -1,8 +1,27 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import App from './App.jsx'
+
+class FakeEventSource {
+  static last
+  constructor(url) {
+    this.url = url
+    this.listeners = {}
+    FakeEventSource.last = this
+  }
+  addEventListener(name, fn) {
+    this.listeners[name] = fn
+  }
+  emit(name, data) {
+    this.listeners[name]?.({ data: JSON.stringify(data) })
+  }
+  close() {
+    this.closed = true
+  }
+}
 
 afterEach(() => {
   vi.restoreAllMocks()
+  delete globalThis.EventSource
 })
 
 describe('App', () => {
@@ -18,5 +37,15 @@ describe('App', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 503, json: async () => ({}) })
     render(<App />)
     expect(await screen.findByText('Nao foi possivel carregar o mapa (HTTP 503).')).toBeInTheDocument()
+  })
+  it('usa o stream quando ha EventSource: snapshot e depois patch', async () => {
+    globalThis.EventSource = FakeEventSource
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: async () => ({ nodes: [], edges: [] }) })
+    const { container } = render(<App />)
+    expect(FakeEventSource.last.url).toBe('/api/topology/stream')
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+    act(() => FakeEventSource.last.emit('snapshot', { nodes: [], edges: [] }))
+    act(() => FakeEventSource.last.emit('patch', { upsertNodes: [], removeNodes: [], upsertEdges: [], removeEdges: [] }))
+    expect(container).toBeTruthy()
   })
 })

@@ -3,13 +3,25 @@ import { MriPageHeader } from '@mriqbox/ui-kit'
 import { Network } from 'lucide-react'
 import { InfraMap } from './components/InfraMap.jsx'
 import { buildInfraTopology } from './lib/topology.js'
+import { applyPatch } from './lib/patch.js'
 
-// F1: o mapa vem de GET /api/topology (declarado pelo services.yml). Na F3 chega o SSE com snapshot + patch.
 export default function App() {
   const [snapshot, setSnapshot] = useState({ nodes: [], edges: [] })
   const [error, setError] = useState(null)
 
   useEffect(() => {
+    // Stream (F3): snapshot ao conectar e patch a cada mudanca; o EventSource reconecta sozinho mandando o
+    // Last-Event-ID. Sem EventSource (ambiente antigo/teste), uma leitura simples.
+    if (typeof EventSource !== 'undefined') {
+      const es = new EventSource('/api/topology/stream')
+      es.addEventListener('snapshot', (ev) => {
+        setError(null)
+        setSnapshot(JSON.parse(ev.data))
+      })
+      es.addEventListener('patch', (ev) => setSnapshot((cur) => applyPatch(cur, JSON.parse(ev.data))))
+      es.addEventListener('error', () => setError('stream interrompido, reconectando'))
+      return () => es.close()
+    }
     const ctrl = new AbortController()
     fetch('/api/topology', { signal: ctrl.signal, headers: { Accept: 'application/json' } })
       .then(async (r) => {

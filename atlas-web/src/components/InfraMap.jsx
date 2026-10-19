@@ -3,7 +3,10 @@ import '@xyflow/react/dist/style.css'
 
 // verde online, ambar degradado, vermelho offline, cinza desconhecido (sem fonte fresca)
 const DOT = { online: 'bg-green-500', degraded: 'bg-amber-500', offline: 'bg-red-500', unknown: 'bg-muted-foreground' }
-const KIND_LABEL = { ENTRY: 'entrada', TRAEFIK: 'traefik', AUTHGATE: 'login', ROUTE: 'rota', SERVICE: 'servico' }
+const KIND_LABEL = {
+  ENTRY: 'entrada', TRAEFIK: 'traefik', AUTHGATE: 'login', ROUTE: 'rota', SERVICE: 'servico',
+  CONTAINER: 'container', POD: 'pod', WORKLOAD: 'workload', ARGO: 'app do argo', DNS: 'dns', TUNNEL: 'tunel',
+}
 
 /** Um no do mapa: nome, tipo, ponto de estado e o motivo (o "porque" do estado, sempre visivel no hover). */
 export function InfraNode({ data }) {
@@ -15,6 +18,15 @@ export function InfraNode({ data }) {
         <span className={`ml-auto h-2 w-2 shrink-0 rounded-full ${DOT[data.state] || DOT.unknown}`} aria-label={data.state} />
       </div>
       <div className="text-xs text-muted-foreground">{KIND_LABEL[data.kind] || data.kind}</div>
+      {data.drift?.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {data.drift.map((d) => (
+            <span key={d} className="rounded border border-amber-500/50 px-1 text-[10px] text-amber-500">
+              {d}
+            </span>
+          ))}
+        </div>
+      )}
       <Handle type="source" position={Position.Right} />
     </div>
   )

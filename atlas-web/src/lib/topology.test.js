@@ -93,4 +93,10 @@ describe('buildInfraTopology', () => {
     expect(buildInfraTopology({ nodes: [], edges: [] })).toEqual({ nodes: [], edges: [] })
     expect(buildInfraTopology(undefined)).toEqual({ nodes: [], edges: [] })
   })
+  it('drift chega ao card', () => {
+    const snap = { nodes: [{ ...n('machine:vps', 'MACHINE', 'vps', 'vps') }, { ...n('route:x.gf2.in', 'ROUTE', 'vps', 'x.gf2.in'), drift: ['servico-sem-dns'] }], edges: [] }
+    const g = byId(buildInfraTopology(snap))
+    expect(g['route:x.gf2.in'].data.drift).toEqual(['servico-sem-dns'])
+    expect(byId(buildInfraTopology(SNAPSHOT))['route:ha.gf2.in'].data.drift).toEqual([])
+  })
 })

@@ -14,4 +14,12 @@ describe('InfraNode', () => {
     expect(screen.getByLabelText('degraded')).toHaveClass('bg-amber-500')
     expect(screen.getByTitle('rota protegida respondeu sem login (200)')).toBeInTheDocument()
   })
+  it('mostra os selos de drift', () => {
+    render(
+      <ReactFlowProvider>
+        <InfraNode data={{ label: 'argo:vps-dozzle', kind: 'ARGO', state: 'degraded', reason: 'OutOfSync/Healthy', drift: ['outofsync'] }} />
+      </ReactFlowProvider>,
+    )
+    expect(screen.getByText('outofsync')).toBeInTheDocument()
+  })
 })
