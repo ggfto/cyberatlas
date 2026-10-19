@@ -1,0 +1,16 @@
+# Base do atlas edge DENTRO do k3s da maquina (Deployment gerido pelo Argo). O overlay por cluster fica no
+# ggfto/infra (k8s/<cluster>/atlas-edge) e fixa esta base por commit. O overlay TEM de fornecer:
+#   - ConfigMap atlas-edge-env: ATLAS_EDGE_MACHINE (vps|host, o nome do mapa) e ATLAS_EDGE_HUB;
+#   - ConfigMap atlas-edge-ca: ca.crt (certificado PUBLICO da CA do atlas);
+#   - o GID do grupo docker da maquina (patch em supplementalGroups);
+#   - NetworkPolicy de saida para o hub e para o IP do no na 6443 (o resto da saida esta aqui).
+# O token de enrollment NUNCA vai para o git: Secret opcional atlas-edge-enroll, criado a mao (enroll.sh).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: atlas-edge
+resources:
+  - limits.yaml
+  - rbac.yaml
+  - pvc.yaml
+  - networkpolicy.yaml
+  - deployment.yaml

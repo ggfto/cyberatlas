@@ -1,0 +1,21 @@
+# Default para container sem resources e teto do namespace: um pod so (edge + socket-proxy) e um PVC.
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: defaults
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 10m, memory: 16Mi}
+      default: {memory: 64Mi}
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: teto
+spec:
+  hard:
+    requests.cpu: 200m
+    requests.memory: 256Mi
+    limits.memory: 512Mi
+    persistentvolumeclaims: "1"
