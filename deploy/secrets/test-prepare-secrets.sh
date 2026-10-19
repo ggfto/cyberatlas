@@ -130,4 +130,13 @@ printf 'RCLONE_CONFIG_R2_ACCESS_KEY_ID=x\n' > "$d2/r2.env"; chmod 600 "$d2/r2.en
 KUBESEAL="$KUBESEAL" bash "$script" --dir "$d2" --cert "$root/test-ss.pem" --pki-script "$pki" > "$root/out-incompleto.txt" 2>&1
 [[ ! -e "$d2/sealed/sealedsecret-atlas-backup-r2.yaml" ]] || fail "selou r2.env incompleto"
 ok "r2.env incompleto tambem nao sela"
+# chave presente com valor vazio conta como faltando (sela o resto, nao sela o backup)
+d3="$root/r2-vazio"; mkdir -p "$d3"; chmod 700 "$d3"
+cp "$d/github.token" "$d3/"
+sed 's/^R2_BUCKET=.*/R2_BUCKET=/' "$d/r2.env" > "$d3/r2.env"; chmod 600 "$d3/r2.env"
+KUBESEAL="$KUBESEAL" bash "$script" --dir "$d3" --cert "$root/test-ss.pem" --pki-script "$pki" > "$root/out-vazio.txt" 2>&1 || fail "r2.env com valor vazio nao saiu 0"
+[[ ! -e "$d3/sealed/sealedsecret-atlas-backup-r2.yaml" ]] || fail "selou r2.env com R2_BUCKET vazio"
+[[ -s "$d3/sealed/sealedsecret-atlas-secrets.yaml" ]] || fail "r2.env com valor vazio impediu selar atlas-secrets"
+grep -q "r2.env.*FALTANDO" "$root/out-vazio.txt" || fail "r2.env com valor vazio nao listado como faltando"
+ok "r2.env com chave de valor vazio: sai 0, nao sela o backup, sela o resto"
 echo "TUDO OK"
