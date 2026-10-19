@@ -61,8 +61,8 @@ class ServicesYmlSourceTest {
         Node svc = n.get("service:host/portainer");
         String publico = f.edges().stream().filter(e -> e.to().equals(svc.key()) && e.kind() == EdgeKind.ROUTES_TO)
                 .map(Edge::from).findFirst().orElseThrow();
-        assertFalse(publico.equals("route:docker.local.gf2.in"));
-        assertTrue(n.containsKey(publico));
+        assertEquals("route:docker-lab.gf2.in", publico);
+        assertFalse(n.containsKey("route:docker.gf2.in"), "docker.gf2.in e outro servico, nao o portainer do host");
         assertTrue(f.edges().contains(Edge.of("entry:host/tunel", "traefik:host", EdgeKind.ROUTES_TO)));
     }
 
