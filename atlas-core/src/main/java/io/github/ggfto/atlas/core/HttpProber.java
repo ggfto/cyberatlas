@@ -1,4 +1,4 @@
-package io.github.ggfto.atlas.adapters.hub;
+package io.github.ggfto.atlas.core;
 
 import java.net.ConnectException;
 import java.net.URI;
@@ -8,7 +8,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.time.Duration;
 
-/** GET simples, sem cookie e sem seguir redirect: o redirect e justamente o que a expectativa julga. */
+/** GET simples, sem cookie e sem seguir redirect (o redirect e o que a expectativa julga). Usado pelo hub e pelo edge. */
 public final class HttpProber {
 
     private final HttpClient client;

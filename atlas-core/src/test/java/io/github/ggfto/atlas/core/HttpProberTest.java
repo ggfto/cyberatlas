@@ -1,4 +1,4 @@
-package io.github.ggfto.atlas.adapters.hub;
+package io.github.ggfto.atlas.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;

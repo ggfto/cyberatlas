@@ -1,7 +1,7 @@
 package io.github.ggfto.atlas.hub;
 
 import io.github.ggfto.atlas.adapters.hub.CheckTarget;
-import io.github.ggfto.atlas.adapters.hub.HttpProber;
+import io.github.ggfto.atlas.core.HttpProber;
 import io.github.ggfto.atlas.adapters.hub.PublicChecks;
 import io.github.ggfto.atlas.adapters.hub.ServicesYmlSource;
 import io.github.ggfto.atlas.core.Topology;

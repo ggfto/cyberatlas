@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.adapters.hub;
 
+import io.github.ggfto.atlas.core.ProbeResult;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import io.github.ggfto.atlas.core.Observation;

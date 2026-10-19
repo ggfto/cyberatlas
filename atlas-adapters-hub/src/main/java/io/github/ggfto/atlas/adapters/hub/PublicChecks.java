@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.adapters.hub;
 
+import io.github.ggfto.atlas.core.HttpProber;
 import io.github.ggfto.atlas.core.Fragment;
 import io.github.ggfto.atlas.core.Observation;
 import io.github.ggfto.atlas.core.TopologySource;

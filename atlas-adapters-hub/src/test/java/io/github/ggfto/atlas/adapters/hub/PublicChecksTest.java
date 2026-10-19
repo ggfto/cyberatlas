@@ -1,5 +1,6 @@
 package io.github.ggfto.atlas.adapters.hub;
 
+import io.github.ggfto.atlas.core.HttpProber;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.sun.net.httpserver.HttpServer;
