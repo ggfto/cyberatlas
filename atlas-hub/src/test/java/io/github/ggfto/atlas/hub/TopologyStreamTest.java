@@ -27,9 +27,9 @@ import org.junit.jupiter.api.Test;
 /** SSE /api/topology/stream (design §3.4): snapshot ao conectar, patch a cada mudanca, retomada por Last-Event-ID. */
 @QuarkusTest
 @TestProfile(FixtureProfile.class)
-class TopologyStreamTest {
+public class TopologyStreamTest {
 
-    record Event(String name, String id, String data) {
+    public record Event(String name, String id, String data) {
     }
 
     @TestHTTPResource("/api/topology/stream")
@@ -41,7 +41,7 @@ class TopologyStreamTest {
     @Inject
     TopologyStream streams;
 
-    static BlockingQueue<Event> open(URI uri, String lastEventId) {
+    public static BlockingQueue<Event> open(URI uri, String lastEventId) {
         BlockingQueue<Event> events = new LinkedBlockingQueue<>();
         HttpRequest.Builder b = HttpRequest.newBuilder(uri).header("Accept", "text/event-stream");
         if (lastEventId != null) {

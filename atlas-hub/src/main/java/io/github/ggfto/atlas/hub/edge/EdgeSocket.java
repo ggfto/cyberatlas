@@ -3,6 +3,7 @@ package io.github.ggfto.atlas.hub.edge;
 import io.github.ggfto.atlas.core.Expectation;
 import io.github.ggfto.atlas.hub.AtlasConfig;
 import io.github.ggfto.atlas.hub.TopologyService;
+import io.github.ggfto.atlas.hub.logs.LogService;
 import io.github.ggfto.atlas.protocol.Frame;
 import io.github.ggfto.atlas.protocol.FrameCodec;
 import io.github.ggfto.atlas.protocol.ProtocolException;
@@ -20,7 +21,8 @@ import org.jboss.logging.Logger;
 
 /**
  * WebSocket dos edges (design §1.1). Primeiro frame tem de ser {@code Hello} do mesmo edge do certificado e numa
- * versao da janela; depois so {@code Snapshot} e {@code Heartbeat}. Qualquer outra coisa encerra a sessao.
+ * versao da janela; depois so {@code Snapshot}, {@code Heartbeat} e os frames de log ({@code LogLines},
+ * {@code LogClose}). Qualquer outra coisa encerra a sessao.
  */
 @WebSocket(path = "/edge/v1", endpointId = EdgeSocket.ENDPOINT)
 public class EdgeSocket {
@@ -34,11 +36,13 @@ public class EdgeSocket {
     private final EdgeHub hub;
     private final TopologyService topology;
     private final AtlasConfig config;
+    private final LogService logs;
 
-    EdgeSocket(EdgeHub hub, TopologyService topology, AtlasConfig config) {
+    EdgeSocket(EdgeHub hub, TopologyService topology, AtlasConfig config, LogService logs) {
         this.hub = hub;
         this.topology = topology;
         this.config = config;
+        this.logs = logs;
     }
 
     @OnOpen
@@ -82,6 +86,8 @@ public class EdgeSocket {
             case Frame.Snapshot s -> topology.accept(EdgeFragmentGuard.accept(s.fragment(), machine, topology::machineOf,
                     Instant.now(), config.checks().ttl()));
             case Frame.Heartbeat h -> c.sendTextAndAwait(FrameCodec.encode(new Frame.Heartbeat(System.currentTimeMillis())));
+            case Frame.LogLines l -> logs.fromEdge(edgeId, l);
+            case Frame.LogClose l -> logs.fromEdge(edgeId, l);
             default -> reject(c, "frame inesperado do edge: " + frame.getClass().getSimpleName());
         }
     }
@@ -91,6 +97,7 @@ public class EdgeSocket {
         String edgeId = c.userData().get(EDGE_ID);
         if (edgeId != null && hub.registry().close(edgeId, c.id())) {
             LOG.infof("edge %s desconectado", edgeId);
+            logs.edgeGone(edgeId);
         }
     }
 

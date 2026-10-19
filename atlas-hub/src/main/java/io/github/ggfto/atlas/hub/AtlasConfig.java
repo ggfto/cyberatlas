@@ -23,6 +23,35 @@ public interface AtlasConfig {
 
     Stream stream();
 
+    Logs logs();
+
+    interface Logs {
+        /** Log ao vivo. Desligado ate a F5 trazer login e o papel atlas-admins: log pode conter segredo. */
+        @WithDefault("false")
+        boolean enabled();
+
+        @WithDefault("4")
+        int perUser();
+
+        @WithDefault("20")
+        int global();
+
+        /** Linhas guardadas por assinante; acima disso o lento perde as mais antigas e recebe dropped. */
+        @WithDefault("2000")
+        int subscriberBuffer();
+
+        /** Follow sem assinante fecha no edge depois disso. */
+        @WithDefault("10s")
+        Duration idleClose();
+
+        @WithDefault("30m")
+        Duration maxDuration();
+
+        /** Lotes que o edge pode mandar antes do primeiro credito de volta. */
+        @WithDefault("8")
+        int initialCredit();
+    }
+
     interface Cloudflare {
         @WithDefault("https://api.cloudflare.com")
         String api();

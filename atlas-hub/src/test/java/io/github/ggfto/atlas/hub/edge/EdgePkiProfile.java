@@ -42,6 +42,7 @@ public class EdgePkiProfile implements QuarkusTestProfile {
             c.put("atlas.edges.ca-key", dir.resolve("ca.key").toString());
             c.put("atlas.edges.port", String.valueOf(EDGE_PORT));
             c.put("atlas.edges.admin-enabled", "true");
+            c.put("atlas.logs.enabled", "true");
             return c;
         } catch (Exception e) {
             throw new IllegalStateException("PKI de teste", e);
