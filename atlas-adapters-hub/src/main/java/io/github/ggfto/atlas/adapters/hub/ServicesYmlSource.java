@@ -140,6 +140,21 @@ public final class ServicesYmlSource implements TopologySource {
         }
     }
 
+    /**
+     * O {@code tunnel_id} do arquivo: so para o hub ligar o tunel da Cloudflare a entrada desta maquina. Nunca vira
+     * atributo de no.
+     */
+    public java.util.Optional<String> tunnelId() {
+        Map<String, Object> doc = new Yaml(new SafeConstructor(new LoaderOptions())).load(yaml.get());
+        Object id = doc.get("tunnel_id");
+        return id == null ? java.util.Optional.empty() : java.util.Optional.of(String.valueOf(id));
+    }
+
+    /** A zona do arquivo (ex.: gf2.in). */
+    public String zone() {
+        return parse().zone();
+    }
+
     private record Parsed(String zone, List<Service> services) {
     }
 

@@ -148,4 +148,11 @@ class ServicesYmlSourceTest {
         assertEquals(new Expectation.Protected("auth.gf2.in"), t.get("route:fx.local.gf2.in").expectation());
         assertFalse(t.keySet().stream().anyMatch(k -> k.startsWith("route:") && !k.contains(".local.")));
     }
+
+    @Test
+    void tunnelIdIsKnownInsideButNeverANodeAttribute() {
+        ServicesYmlSource vps = new ServicesYmlSource("vps", () -> fixture("services-vps.yml"), CLOCK);
+        assertEquals(java.util.Optional.of("00000000-0000-0000-0000-00000000bbbb"), vps.tunnelId());
+        assertEquals(java.util.Optional.empty(), new ServicesYmlSource("x", () -> "zone: a.test\nservices: {}\n", CLOCK).tunnelId());
+    }
 }
