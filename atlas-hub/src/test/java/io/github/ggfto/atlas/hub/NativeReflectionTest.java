@@ -46,7 +46,7 @@ class NativeReflectionTest {
         for (Class<?> c : List.of(io.github.ggfto.atlas.hub.store.AuditLog.Entry.class, io.github.ggfto.atlas.hub.store.LayoutStore.Position.class,
                 io.github.ggfto.atlas.hub.store.StatusHistory.Change.class, io.github.ggfto.atlas.hub.layout.LayoutResource.Move.class,
                 io.github.ggfto.atlas.hub.layout.LayoutResource.BatchItem.class, io.github.ggfto.atlas.hub.layout.LayoutResource.ItemResult.class,
-                io.github.ggfto.atlas.hub.layout.LayoutResource.Conflict.class, io.github.ggfto.atlas.hub.auth.MeResource.Me.class)) {
+                io.github.ggfto.atlas.hub.layout.LayoutResource.Conflict.class, io.github.ggfto.atlas.hub.auth.MeResource.Me.class, TopologyService.SourceStatus.class)) {
             assertTrue(c.isAnnotationPresent(RegisterForReflection.class), "corpo sem reflexao no nativo: " + c.getName());
         }
     }

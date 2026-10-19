@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -45,8 +46,8 @@ public final class CloudflareSource implements TopologySource {
     private final URI api;
     private final String token;
     private final String account;
-    private final String zone;
-    private final Map<String, String> tunnelMachine;
+    private final Supplier<String> zone;
+    private final Supplier<Map<String, String>> tunnelMachine;
     private final Duration timeout;
     private final Clock clock;
     private final Duration ttl;
@@ -54,11 +55,20 @@ public final class CloudflareSource implements TopologySource {
 
     public CloudflareSource(URI api, String token, String account, String zone, Map<String, String> tunnelMachine,
                             Duration timeout, Clock clock, Duration ttl) {
+        this(api, token, account, () -> zone, () -> Map.copyOf(tunnelMachine), timeout, clock, ttl);
+    }
+
+    /**
+     * Zona e tuneis -> maquina resolvidos a cada coleta (vem do services.yml, que pode estar no GitHub): falha ao
+     * ler vira erro desta coleta, nunca do boot do hub.
+     */
+    public CloudflareSource(URI api, String token, String account, Supplier<String> zone, Supplier<Map<String, String>> tunnelMachine,
+                            Duration timeout, Clock clock, Duration ttl) {
         this.api = api;
         this.token = token;
         this.account = account;
         this.zone = zone;
-        this.tunnelMachine = Map.copyOf(tunnelMachine);
+        this.tunnelMachine = tunnelMachine;
         this.timeout = timeout;
         this.clock = clock;
         this.ttl = ttl;
@@ -72,11 +82,16 @@ public final class CloudflareSource implements TopologySource {
 
     @Override
     public String toString() {
-        return "CloudflareSource[" + zone + ", token omitido]";
+        return "CloudflareSource[token omitido]";
     }
 
     @Override
     public Fragment collect() throws IOException, InterruptedException {
+        String zone = this.zone.get();
+        Map<String, String> tunnelMachine = this.tunnelMachine.get();
+        if (zone == null || zone.isBlank()) {
+            throw new IOException("cloudflare: zona nao definida (atlas.cloudflare.zone ou zone do services.yml)");
+        }
         JsonNode zones = get("/client/v4/zones?name=" + zone).path("result");
         if (!zones.isArray() || zones.isEmpty()) {
             throw new IOException("cloudflare: zona " + zone + " nao encontrada para o token");
