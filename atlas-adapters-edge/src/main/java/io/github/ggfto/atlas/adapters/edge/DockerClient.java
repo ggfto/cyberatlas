@@ -1,0 +1,135 @@
+package io.github.ggfto.atlas.adapters.edge;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.StandardProtocolFamily;
+import java.net.UnixDomainSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
+
+/**
+ * Cliente HTTP minimo do Docker Engine sobre o socket Unix (design §2: o docker-java nao vai bem em native).
+ * So tres GETs passam, com allowlist aqui no codigo, alem do socket-proxy: a listagem, os eventos e os logs.
+ * O inspect ({@code /containers/{id}/json}) traz {@code Config.Env} e nunca e chamado.
+ */
+public final class DockerClient {
+
+    private static final String QUERY = "(\\?[A-Za-z0-9=&_%.-]*)?";
+    private static final List<Pattern> ALLOWED = List.of(
+            Pattern.compile("^/containers/json" + QUERY + "$"),
+            Pattern.compile("^/events" + QUERY + "$"),
+            Pattern.compile("^/containers/[a-f0-9]{12,64}/logs" + QUERY + "$"));
+
+    private final Path socket;
+    private final Duration timeout;
+
+    public DockerClient(Path socket, Duration timeout) {
+        this.socket = socket;
+        this.timeout = timeout;
+    }
+
+    public static boolean allowed(String path) {
+        return ALLOWED.stream().anyMatch(p -> p.matcher(path).matches());
+    }
+
+    public String get(String path) throws IOException {
+        if (!allowed(path)) {
+            throw new IllegalArgumentException("endpoint do docker fora da allowlist: " + path);
+        }
+        SocketChannel ch = SocketChannel.open(StandardProtocolFamily.UNIX);
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            var call = pool.submit(() -> exchange(ch, path));
+            try {
+                return call.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
+            } catch (TimeoutException e) {
+                ch.close();
+                throw new IOException("docker GET " + path + ": timeout");
+            } catch (ExecutionException e) {
+                throw e.getCause() instanceof IOException io ? io : new IOException(e.getCause());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("docker GET " + path + ": interrompido");
+            }
+        } finally {
+            ch.close();
+        }
+    }
+
+    private String exchange(SocketChannel ch, String path) throws IOException {
+        ch.connect(UnixDomainSocketAddress.of(socket));
+        String req = "GET " + path + " HTTP/1.1\r\nHost: docker\r\nUser-Agent: cyberatlas-edge\r\nConnection: close\r\n\r\n";
+        ch.write(ByteBuffer.wrap(req.getBytes(StandardCharsets.US_ASCII)));
+        ByteArrayOutputStream all = new ByteArrayOutputStream();
+        ByteBuffer buf = ByteBuffer.allocate(16 * 1024);
+        while (ch.read(buf) >= 0) {
+            buf.flip();
+            all.write(buf.array(), 0, buf.limit());
+            buf.clear();
+        }
+        return parse(path, all.toByteArray());
+    }
+
+    static String parse(String path, byte[] raw) throws IOException {
+        int split = indexOf(raw, "\r\n\r\n".getBytes(StandardCharsets.US_ASCII), 0);
+        if (split < 0) {
+            throw new IOException("docker GET " + path + ": resposta sem cabecalho");
+        }
+        String[] head = new String(raw, 0, split, StandardCharsets.US_ASCII).split("\r\n");
+        int code = Integer.parseInt(head[0].split(" ", 3)[1]);
+        boolean chunked = false;
+        for (int i = 1; i < head.length; i++) {
+            String h = head[i].toLowerCase(Locale.ROOT);
+            if (h.startsWith("transfer-encoding:") && h.contains("chunked")) {
+                chunked = true;
+            }
+        }
+        byte[] body = java.util.Arrays.copyOfRange(raw, split + 4, raw.length);
+        if (code != 200) {
+            throw new IOException("docker GET " + path + ": HTTP " + code);
+        }
+        return new String(chunked ? dechunk(body) : body, StandardCharsets.UTF_8);
+    }
+
+    /** Transfer-Encoding: chunked em bytes (o tamanho do chunk e em bytes, nao em caracteres). */
+    private static byte[] dechunk(byte[] body) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] crlf = "\r\n".getBytes(StandardCharsets.US_ASCII);
+        int i = 0;
+        while (i < body.length) {
+            int eol = indexOf(body, crlf, i);
+            if (eol < 0) {
+                throw new IOException("chunk sem tamanho");
+            }
+            int size = Integer.parseInt(new String(body, i, eol - i, StandardCharsets.US_ASCII).split(";")[0].trim(), 16);
+            if (size == 0) {
+                break;
+            }
+            out.write(body, eol + 2, size);
+            i = eol + 2 + size + 2;
+        }
+        return out.toByteArray();
+    }
+
+    private static int indexOf(byte[] data, byte[] needle, int from) {
+        outer:
+        for (int i = from; i <= data.length - needle.length; i++) {
+            for (int j = 0; j < needle.length; j++) {
+                if (data[i + j] != needle[j]) {
+                    continue outer;
+                }
+            }
+            return i;
+        }
+        return -1;
+    }
+}
