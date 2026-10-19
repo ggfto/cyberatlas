@@ -17,6 +17,46 @@ public interface AtlasConfig {
 
     Edges edges();
 
+    Cloudflare cloudflare();
+
+    Argocd argocd();
+
+    Stream stream();
+
+    interface Cloudflare {
+        @WithDefault("https://api.cloudflare.com")
+        String api();
+
+        /** Token so leitura (Zone:Read, DNS:Read, Cloudflare Tunnel:Read), de Secret. Sem ele, sem Cloudflare. */
+        Optional<String> token();
+
+        Optional<String> accountId();
+
+        /** Zona; padrao = a do primeiro services.yml. */
+        Optional<String> zone();
+    }
+
+    interface Argocd {
+        /** URL da API do Argo CD, ex.: http://argocd-server.argocd.svc. Sem ela (e o token), sem Argo. */
+        Optional<String> url();
+
+        /** Token da conta local so leitura do Argo, de Secret. */
+        Optional<String> token();
+
+        /** destination.name ou destination.server de uma app -> maquina. */
+        Map<String, String> clusterMachines();
+    }
+
+    interface Stream {
+        /** De quanto em quanto tempo o stream confere se o mapa mudou (inclui estados que venceram pelo TTL). */
+        @WithDefault("5s")
+        Duration every();
+
+        /** Quantas versoes ficam guardadas para a retomada por Last-Event-ID. */
+        @WithDefault("64")
+        int history();
+    }
+
     interface Edges {
         /** CA do atlas (PEM). Sem as duas, nao ha enrollment nem edge conectado. */
         Optional<String> caCert();

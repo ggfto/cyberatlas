@@ -1,6 +1,8 @@
 package io.github.ggfto.atlas.hub;
 
+import io.github.ggfto.atlas.adapters.hub.ArgoSource;
 import io.github.ggfto.atlas.adapters.hub.CheckTarget;
+import io.github.ggfto.atlas.adapters.hub.CloudflareSource;
 import io.github.ggfto.atlas.core.HttpProber;
 import io.github.ggfto.atlas.adapters.hub.PublicChecks;
 import io.github.ggfto.atlas.adapters.hub.ServicesYmlSource;
@@ -36,6 +38,19 @@ public class TopologyService {
             byMachine.put(machine, src);
         });
         List<TopologySource> sources = new ArrayList<>(files);
+        AtlasConfig.Cloudflare cf = config.cloudflare();
+        if (cf.token().isPresent() && cf.accountId().isPresent()) {
+            String zone = cf.zone().orElseGet(() -> files.isEmpty() ? "" : files.get(0).zone());
+            java.util.Map<String, String> tunnels = new java.util.HashMap<>();
+            byMachine.forEach((machine, src) -> src.tunnelId().ifPresent(id -> tunnels.put(id, machine)));
+            sources.add(new CloudflareSource(java.net.URI.create(cf.api()), cf.token().get(), cf.accountId().get(), zone, tunnels,
+                    java.time.Duration.ofSeconds(10), clock, config.checks().ttl()));
+        }
+        AtlasConfig.Argocd argo = config.argocd();
+        if (argo.url().isPresent() && argo.token().isPresent()) {
+            sources.add(new ArgoSource(java.net.URI.create(argo.url().get()), argo.token().get(), argo.clusterMachines(),
+                    java.time.Duration.ofSeconds(10), clock, config.checks().ttl()));
+        }
         if (config.checks().enabled()) {
             sources.add(new PublicChecks(() -> targets(files), new HttpProber(config.checks().timeout()), clock,
                     config.checks().ttl()));

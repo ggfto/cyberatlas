@@ -11,6 +11,7 @@ import io.github.ggfto.atlas.core.SourceState;
 import io.github.ggfto.atlas.core.State;
 import io.github.ggfto.atlas.core.Topology;
 import io.github.ggfto.atlas.core.TopologyNode;
+import io.github.ggfto.atlas.core.TopologyPatch;
 import io.github.ggfto.atlas.protocol.Frame;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 
@@ -19,7 +20,7 @@ import io.quarkus.runtime.annotations.RegisterForReflection;
  * reflexao (o mapa para o browser e os frames do WebSocket dos edges). O NativeReflectionTest confere a lista.
  */
 @RegisterForReflection(targets = {Topology.class, TopologyNode.class, Node.class, NodeStatus.class, SourceState.class,
-        Edge.class, State.class, NodeKind.class, EdgeKind.class, Fragment.class, Observation.class,
+        Edge.class, State.class, NodeKind.class, EdgeKind.class, Fragment.class, Observation.class, TopologyPatch.class,
         Frame.class, Frame.Hello.class, Frame.Welcome.class, Frame.LocalCheck.class, Frame.Reject.class,
         Frame.Snapshot.class, Frame.Resync.class, Frame.Heartbeat.class})
 final class NativeReflection {
