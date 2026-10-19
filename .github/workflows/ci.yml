@@ -58,6 +58,18 @@ jobs:
       # native-image roda no container do builder Mandrel da propria arquitetura (sem cross-compile);
       # os @QuarkusIntegrationTest rodam contra o binario nativo gerado
       - run: mvn -B verify -Pnative
+      # regressao do -march (profile native-march-amd64 do pom): os binarios amd64 tem que subir em CPU
+      # sem AVX (x86-64-v2, ex. Celeron N5095). qemu-user emula Nehalem; qemu do Debian trixie (10.x)
+      # porque o 8.2 do ubuntu 24.04 da SIGSEGV interno com binario GraalVM.
+      - name: binarios nativos sobem em CPU sem AVX (qemu -cpu Nehalem)
+        if: matrix.arch == 'amd64'
+        run: |
+          docker run --rm -v "$PWD:/w:ro" -w /w \
+            debian:trixie-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f \
+            bash -c 'set -euo pipefail
+              apt-get update -qq
+              DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends qemu-user >/dev/null
+              .github/scripts/cpu-sem-avx.sh atlas-hub/target/*-runner atlas-edge/target/*-runner'
       # so quando publica: os binarios nativos seguem para o job de publicacao da mesma arquitetura
       - name: binarios nativos (artifact)
         if: env.PUBLICAR == 'true'
