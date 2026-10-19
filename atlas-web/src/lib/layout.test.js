@@ -31,6 +31,7 @@ describe('layout manual', () => {
     expect(url).toBe('/api/layout/nodes/service:vps/a')
     expect(init.method).toBe('PATCH')
     expect(init.headers['If-Match']).toBe('"3"')
+    expect(init.headers['X-Atlas-Csrf']).toBe('1')
     expect(JSON.parse(init.body)).toEqual({ x: 1, y: 2 })
   })
 

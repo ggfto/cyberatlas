@@ -1,6 +1,8 @@
 // Layout manual (design §3.2): a posicao que o operador arrastou vence a automatica, no por no. Gravar e um PATCH por
 // no com If-Match da rev; no 409 a posicao vence o ultimo, entao reenvia uma vez com a rev atual.
 
+import { apiWrite } from './api.js'
+
 /** Aplica as posicoes manuais ({ key: {x, y, rev} }) por cima do layout automatico; caixas de maquina nao mudam. */
 export function applyLayout(nodes, manual) {
   return nodes.map((n) => {
@@ -11,11 +13,11 @@ export function applyLayout(nodes, manual) {
 }
 
 async function patch(key, pos, rev, fetchImpl) {
-  return fetchImpl(`/api/layout/nodes/${key}`, {
+  return apiWrite(`/api/layout/nodes/${key}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'If-Match': `"${rev}"` },
     body: JSON.stringify({ x: pos.x, y: pos.y }),
-  })
+  }, fetchImpl)
 }
 
 export async function saveMove(key, pos, rev, fetchImpl = fetch) {

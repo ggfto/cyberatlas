@@ -28,6 +28,13 @@ public interface AtlasConfig {
     Breakglass breakglass();
 
     /**
+     * Origem publica do atlas (esquema://host[:porta]). Escrita autenticada por cookie so passa com {@code Origin}
+     * (ou {@code Referer}) desta origem e o header anti-CSRF (issue #18, CsrfGuard).
+     */
+    @WithDefault("https://atlas.gf2.in")
+    String publicOrigin();
+
+    /**
      * Login local para quando o Authentik cair (design §4): usuario unico, hash bcrypt do cofre via Secret. So vale
      * na porta TLS de edge (8443, so WG/cluster); sem os dois, nao existe.
      */

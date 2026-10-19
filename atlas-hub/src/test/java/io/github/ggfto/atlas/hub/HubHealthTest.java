@@ -21,9 +21,20 @@ class HubHealthTest {
 
     @Test
     void servesTheWebBundle() {
-        // o index do Vite chega pelo Quinoa, com a CSP de producao injetada no build
         given().auth().oauth2(Tokens.viewer()).when().get("/").then().statusCode(200)
-                .body(containsString("<div id=\"root\"></div>"))
-                .body(containsString("Content-Security-Policy"));
+                .body(containsString("<div id=\"root\"></div>"));
+    }
+
+    /**
+     * A CSP sai do hub como header HTTP (issue #18): em {@code <meta>} o browser ignora frame-ancestors, e sem isto
+     * so o X-Frame-Options do Traefik impedia enquadrar o atlas.
+     */
+    @Test
+    void htmlCarriesTheCspAsARealHeader() {
+        given().auth().oauth2(Tokens.viewer()).when().get("/").then().statusCode(200)
+                .contentType(containsString("text/html"))
+                .header("Content-Security-Policy", containsString("frame-ancestors 'none'"))
+                .header("Content-Security-Policy", containsString("default-src 'self'"))
+                .header("X-Content-Type-Options", is("nosniff"));
     }
 }
