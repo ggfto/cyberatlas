@@ -36,8 +36,6 @@ import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequest;
  */
 public final class AtlasCa {
 
-    private static final SecureRandom RANDOM = new SecureRandom();
-
     private final X509Certificate cert;
     private final PrivateKey key;
 
@@ -120,7 +118,8 @@ public final class AtlasCa {
         return new JcaX509CertificateConverter().getCertificate(b.build(new JcaContentSignerBuilder("SHA256withECDSA").build(key)));
     }
 
+    /** SecureRandom criado na hora: no native image um static ficaria com a semente gravada no binario. */
     private static BigInteger serial() {
-        return new BigInteger(120, RANDOM);
+        return new BigInteger(120, new SecureRandom());
     }
 }

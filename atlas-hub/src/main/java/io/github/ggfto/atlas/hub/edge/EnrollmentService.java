@@ -30,7 +30,6 @@ public final class EnrollmentService {
     static final Duration TOKEN_TTL = Duration.ofHours(1);
     static final Duration CERT_TTL = Duration.ofDays(90);
     private static final Pattern MACHINE = Pattern.compile("[a-z0-9][a-z0-9-]{0,30}");
-    private static final SecureRandom RANDOM = new SecureRandom();
 
     public record NewEdge(String edgeId, String token, Instant expiresAt) {
         @Override
@@ -50,6 +49,8 @@ public final class EnrollmentService {
 
     private final AtlasCa ca;
     private final Supplier<Instant> clock;
+    // nunca static: no native image um SecureRandom criado no build ficaria com a semente gravada no binario
+    private final SecureRandom random = new SecureRandom();
     private final Map<String, Edge> edges = new ConcurrentHashMap<>();
     private final Map<String, PendingToken> tokens = new ConcurrentHashMap<>();
 
@@ -129,7 +130,7 @@ public final class EnrollmentService {
 
     private NewEdge mint(String edgeId) {
         byte[] raw = new byte[32];
-        RANDOM.nextBytes(raw);
+        random.nextBytes(raw);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(raw);
         Instant expires = clock.get().plus(TOKEN_TTL);
         tokens.values().removeIf(t -> t.edgeId().equals(edgeId));
