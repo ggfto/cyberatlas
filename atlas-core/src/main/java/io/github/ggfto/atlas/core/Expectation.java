@@ -17,7 +17,7 @@ public sealed interface Expectation {
     /** Rota atras do Authentik: espera 3xx para {@code authHost}. */
     record Protected(String authHost) implements Expectation {
         @Override
-        public Observation classify(String nodeKey, ProbeResult r, Instant at, Duration ttl, String src) {
+        public Observation judge(String nodeKey, ProbeResult r, Instant at, Duration ttl, String src) {
             if (r.error() != null) {
                 return obs(nodeKey, State.OFFLINE, "sem resposta: " + r.error(), at, ttl, src);
             }
@@ -38,7 +38,7 @@ public sealed interface Expectation {
     /** Rota sem parede: espera 2xx/3xx, mas nao um redirect para o login. */
     record Open(String authHost) implements Expectation {
         @Override
-        public Observation classify(String nodeKey, ProbeResult r, Instant at, Duration ttl, String src) {
+        public Observation judge(String nodeKey, ProbeResult r, Instant at, Duration ttl, String src) {
             if (r.error() != null) {
                 return obs(nodeKey, State.OFFLINE, "sem resposta: " + r.error(), at, ttl, src);
             }
@@ -55,7 +55,21 @@ public sealed interface Expectation {
         }
     }
 
-    Observation classify(String nodeKey, ProbeResult result, Instant at, Duration ttl, String source);
+    /** Dias minimos de validade do certificado da rota antes de virar degradado. */
+    int CERT_MIN_DAYS = 14;
+
+    /** Julgamento da resposta pela regra da rota (sem o certificado). */
+    Observation judge(String nodeKey, ProbeResult result, Instant at, Duration ttl, String source);
+
+    /** Julga a resposta e, se ela estiver bem, confere a validade do certificado: nunca esconde um estado pior. */
+    default Observation classify(String nodeKey, ProbeResult result, Instant at, Duration ttl, String source) {
+        Observation o = judge(nodeKey, result, at, ttl, source);
+        Integer days = result.certDaysLeft();
+        if (o.state() == State.ONLINE && days != null && days < CERT_MIN_DAYS) {
+            return new Observation(nodeKey, source, State.DEGRADED, "cert vence em " + days + " dias", at, ttl);
+        }
+        return o;
+    }
 
     /** Checagem pela internet (hub). */
     default Observation classify(String nodeKey, ProbeResult result, Instant at, Duration ttl) {
