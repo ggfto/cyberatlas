@@ -36,7 +36,11 @@
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
-      <artifactId>quarkus-rest</artifactId>
+      <artifactId>quarkus-rest-jackson</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-scheduler</artifactId>
     </dependency>
     <dependency>
       <groupId>io.quarkiverse.quinoa</groupId>
@@ -51,6 +55,22 @@
       <groupId>io.quarkiverse.quinoa</groupId>
       <artifactId>quarkus-quinoa-testing</artifactId>
       <version>${quarkus-quinoa.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!-- spike da F1 (policy por porta); na F5 entra em compile junto com o quarkus-oidc -->
+    <dependency>
+      <groupId>io.quarkus</groupId>
+      <artifactId>quarkus-security</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.smallrye.certs</groupId>
+      <artifactId>smallrye-certificate-generator</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>
