@@ -66,9 +66,9 @@ public class TopologyStream {
     }
 
     public synchronized Initial initial(String lastEventId) {
-        if (current == null) {
-            refresh();
-        }
+        // sempre atualiza antes: o tick pode ter rodado antes da primeira coleta (ou estar a 5 s de rodar), e o
+        // cliente novo tem de receber o mapa de agora; a mudanca, se houver, vira patch para os outros
+        refresh();
         Long last = parse(lastEventId);
         if (last != null && last == version) {
             return new Initial.UpToDate(version);

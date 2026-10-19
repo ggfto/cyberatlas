@@ -120,4 +120,15 @@ class TopologyStreamTest {
         streams.refresh();
         assertEquals(null, live.poll(1, TimeUnit.SECONDS));
     }
+
+    @Test
+    void newClientGetsTheLatestMapEvenBeforeTheNextTick() throws Exception {
+        // corrida vista na CI: o tick do stream rodou antes da primeira coleta e o cliente recebeu o mapa vazio
+        streams.refresh();
+        topology.accept(new Fragment("edge:vps/docker-recente", Instant.now(), Duration.ofSeconds(90),
+                List.of(new Node("docker:vps/sem-tick", NodeKind.CONTAINER, "sem-tick", "vps", Map.of())), List.of(), List.of()));
+        Event first = open(stream, null).poll(10, TimeUnit.SECONDS);
+        assertEquals("snapshot", first.name());
+        assertTrue(first.data().contains("docker:vps/sem-tick"), "cliente novo viu o mapa velho");
+    }
 }
