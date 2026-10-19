@@ -29,7 +29,9 @@ class FrameCodecTest {
                 List.of(new Observation("docker:vps/9router", "docker", State.ONLINE, "running", AT, Duration.ofSeconds(90))));
         List<Frame> frames = List.of(
                 new Frame.Hello("edge-vps", 1, "vps", List.of("docker", "kubernetes"), Map.of("docker", "1")),
-                new Frame.Welcome("s-1", 1, 30_000, 90_000),
+                new Frame.Welcome("s-1", 1, 30_000, 90_000, List.of(
+                        new Frame.LocalCheck("service:vps/9router", "http://9router:20128/", "auth.gf2.in", false),
+                        new Frame.LocalCheck("route:fx.local.gf2.in", "https://fx.local.gf2.in/", "auth.gf2.in", true))),
                 new Frame.Reject("versao 7 fora da janela [0, 1]"),
                 new Frame.Snapshot("docker", 3, frag),
                 new Frame.Resync("docker"),

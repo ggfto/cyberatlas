@@ -26,8 +26,19 @@ public sealed interface Frame {
                  Map<String, String> adapterVersions) implements Frame {
     }
 
-    /** hub → edge: sessao aceita, com a config de coleta. */
-    record Welcome(String sessionId, int acceptedVersion, long collectEveryMs, long ttlMs) implements Frame {
+    /**
+     * hub → edge: sessao aceita, com a config de coleta e os checks locais desta maquina (backends e rotas
+     * {@code *.local} do services.yml), que so o edge alcanca.
+     */
+    record Welcome(String sessionId, int acceptedVersion, long collectEveryMs, long ttlMs, List<LocalCheck> checks)
+            implements Frame {
+        public Welcome {
+            checks = checks == null ? List.of() : List.copyOf(checks);
+        }
+    }
+
+    /** Um GET que o edge faz de dentro da maquina; {@code authHost} nao nulo = rota protegida. */
+    record LocalCheck(String nodeKey, String url, String authHost, boolean protectedRoute) {
     }
 
     /** hub → edge: recusa definitiva (versao, edge revogado); o edge nao reconecta em loop rapido. */
