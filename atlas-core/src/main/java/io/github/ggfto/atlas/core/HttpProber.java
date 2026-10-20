@@ -36,13 +36,26 @@ public final class HttpProber {
         } catch (HttpTimeoutException e) {
             return new ProbeResult(null, null, "timeout");
         } catch (ConnectException e) {
-            return new ProbeResult(null, null, "conexao recusada");
+            return new ProbeResult(null, null, connectReason(e));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return new ProbeResult(null, null, "interrompido");
         } catch (Exception e) {
             return new ProbeResult(null, null, e.getClass().getSimpleName());
         }
+    }
+
+    /**
+     * O {@code HttpClient} do JDK da {@link ConnectException} tanto para nome que nao resolve quanto para porta
+     * recusada: a causa separa os dois. Conexao que nao completa no prazo ja saiu como timeout.
+     */
+    static String connectReason(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.nio.channels.UnresolvedAddressException || t instanceof java.net.UnknownHostException) {
+                return "nao resolve";
+            }
+        }
+        return "conexao recusada";
     }
 
     private static Integer certDaysLeft(HttpResponse<?> resp) {

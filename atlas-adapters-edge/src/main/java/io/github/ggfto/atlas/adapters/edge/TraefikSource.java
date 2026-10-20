@@ -42,10 +42,17 @@ public final class TraefikSource implements TopologySource {
     private final Clock clock;
     private final Duration ttl;
     private final HttpClient http;
+    private final LocalChecks.Resolver resolver;
 
     public TraefikSource(String machine, URI base, Duration timeout, Clock clock, Duration ttl) {
+        this(machine, base, () -> java.util.function.UnaryOperator.identity(), timeout, clock, ttl);
+    }
+
+    /** Com tradutor: no k3s, {@code http://traefik:8080} vira o IP do container (o DNS do Docker nao existe no pod). */
+    public TraefikSource(String machine, URI base, LocalChecks.Resolver resolver, Duration timeout, Clock clock, Duration ttl) {
         this.machine = machine;
         this.base = base;
+        this.resolver = resolver;
         this.timeout = timeout;
         this.clock = clock;
         this.ttl = ttl;
@@ -59,8 +66,16 @@ public final class TraefikSource implements TopologySource {
 
     @Override
     public Fragment collect() throws IOException, InterruptedException {
-        JsonNode routers = get("/api/http/routers");
-        JsonNode services = get("/api/http/services");
+        URI api;
+        try {
+            api = resolver.snapshot().apply(base);
+        } catch (IOException | RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IOException(e);
+        }
+        JsonNode routers = get(api, "/api/http/routers");
+        JsonNode services = get(api, "/api/http/services");
         Map<String, JsonNode> serviceByName = new HashMap<>();
         services.forEach(s -> serviceByName.put(s.path("name").asText(), s));
         Instant now = clock.instant();
@@ -129,8 +144,8 @@ public final class TraefikSource implements TopologySource {
         return out;
     }
 
-    private JsonNode get(String path) throws IOException, InterruptedException {
-        HttpRequest req = HttpRequest.newBuilder(base.resolve(path)).timeout(timeout).header("Accept", "application/json").GET().build();
+    private JsonNode get(URI api, String path) throws IOException, InterruptedException {
+        HttpRequest req = HttpRequest.newBuilder(api.resolve(path)).timeout(timeout).header("Accept", "application/json").GET().build();
         HttpResponse<String> resp = http.send(req, HttpResponse.BodyHandlers.ofString());
         if (resp.statusCode() != 200) {
             throw new IOException("traefik GET " + path + ": HTTP " + resp.statusCode());

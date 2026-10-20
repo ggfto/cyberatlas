@@ -25,3 +25,44 @@ spec:
         - ipBlock: {cidr: 10.43.0.1/32}
       ports:
         - {port: 443, protocol: TCP}
+---
+# Checks locais (backend de cada servico do services.yml e API do Traefik) e o que o edge do compose alcancava.
+# O edge traduz o alvo para IP (TargetResolver): container -> IP na bridge do Docker (172.16.0.0/12, que inclui o
+# docker0 172.17.0.1 de host.docker.internal) e NodePort -> pod depois do DNAT do kube-proxy (10.42.0.0/16, o
+# podCIDR padrao do k3s). So TCP e so faixa privada: nada de internet. O trafego que a policy libera sai marcado
+# pelo kube-router (0x20000) e o FORWARD o aceita antes das chains do Docker, entao basta esta policy (host com
+# Docker 29 e VPS com Docker 27); a regra DOCKER-USER do infra (#38) fica so como plano B.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlas-edge-checks
+spec:
+  podSelector:
+    matchLabels: {app: atlas-edge}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 172.16.0.0/12}
+        - ipBlock: {cidr: 10.42.0.0/16}
+      ports:
+        - {protocol: TCP}
+---
+# IP do no (loopback do services.yml e container em network_mode host). E por cluster: o overlay troca o cidr,
+# ex. host 192.168.68.107/32, VPS 10.0.0.66/32:
+#   patches:
+#     - target: {kind: NetworkPolicy, name: atlas-edge-no}
+#       patch: '[{"op": "replace", "path": "/spec/egress/0/to/0/ipBlock/cidr", "value": "192.168.68.107/32"}]'
+# Sem o patch fica 192.0.2.1/32 (TEST-NET-1, RFC 5737): nao libera nada.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: atlas-edge-no
+spec:
+  podSelector:
+    matchLabels: {app: atlas-edge}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - ipBlock: {cidr: 192.0.2.1/32}
+      ports:
+        - {protocol: TCP}

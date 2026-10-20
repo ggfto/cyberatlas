@@ -32,6 +32,21 @@ public interface EdgeConfig {
     @WithDefault("false")
     boolean kubernetes();
 
+    /**
+     * Traduz o host dos alvos (checks locais e API do Traefik) para IP: nome de container pela listagem do Docker,
+     * {@code host.docker.internal} pelo {@link #hostGateway()}, loopback pelo {@link #nodeIp()}. Ligado no k3s, onde
+     * o pod nao tem o DNS do Docker; desligado no compose.
+     */
+    @WithDefault("false")
+    boolean resolveTargets();
+
+    /** O que {@code host.docker.internal} era no compose ({@code host-gateway}): o gateway do docker0. */
+    @WithDefault("172.17.0.1")
+    String hostGateway();
+
+    /** IP do no ({@code status.hostIP} pela downward API), para loopback e containers em rede host. */
+    Optional<String> nodeIp();
+
     @WithDefault("10s")
     Duration timeout();
 }

@@ -66,4 +66,24 @@ class HttpProberTest {
         }
         assertEquals("conexao recusada", new HttpProber(Duration.ofSeconds(2)).probe(URI.create("http://127.0.0.1:" + port + "/")).error());
     }
+
+    @Test
+    void nomeQueNaoResolveNaoEConexaoRecusada() {
+        // .invalid nunca resolve (RFC 6761): e o caso do pod que tenta "fx-panel" ou host.docker.internal
+        assertEquals("nao resolve", new HttpProber(Duration.ofSeconds(5)).probe(URI.create("http://fx-panel.invalid:8080/")).error());
+    }
+
+    @Test
+    void motivoDaConexaoVemDaCausa() {
+        var unresolved = new java.net.ConnectException();
+        unresolved.initCause(new java.net.ConnectException());
+        unresolved.getCause().initCause(new java.nio.channels.UnresolvedAddressException());
+        assertEquals("nao resolve", HttpProber.connectReason(unresolved));
+        assertEquals("nao resolve", HttpProber.connectReason(new java.net.ConnectException() {{
+            initCause(new java.net.UnknownHostException("x"));
+        }}));
+        var refused = new java.net.ConnectException();
+        refused.initCause(new java.nio.channels.ClosedChannelException());
+        assertEquals("conexao recusada", HttpProber.connectReason(refused));
+    }
 }

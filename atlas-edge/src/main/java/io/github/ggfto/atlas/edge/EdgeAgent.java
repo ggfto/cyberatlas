@@ -7,6 +7,7 @@ import io.github.ggfto.atlas.adapters.edge.KubernetesLogSource;
 import io.github.ggfto.atlas.adapters.edge.DockerSource;
 import io.github.ggfto.atlas.adapters.edge.KubernetesSource;
 import io.github.ggfto.atlas.adapters.edge.LocalChecks;
+import io.github.ggfto.atlas.adapters.edge.TargetResolver;
 import io.github.ggfto.atlas.adapters.edge.TraefikSource;
 import io.github.ggfto.atlas.core.Expectation;
 import io.github.ggfto.atlas.core.LogSource;
@@ -135,7 +136,7 @@ public class EdgeAgent {
         Clock clock = Clock.systemUTC();
         List<TopologySource> out = new ArrayList<>();
         config.docker().ifPresent(d -> out.add(new DockerSource(m, DockerClient.of(URI.create(d), config.timeout()), clock, ttl)));
-        config.traefik().ifPresent(t -> out.add(new TraefikSource(m, URI.create(t), config.timeout(), clock, ttl)));
+        config.traefik().ifPresent(t -> out.add(new TraefikSource(m, URI.create(t), resolver(), config.timeout(), clock, ttl)));
         if (config.kubernetes()) {
             out.add(new KubernetesSource(m, kubernetes.get(), clock, ttl));
         }
@@ -152,10 +153,22 @@ public class EdgeAgent {
         return out;
     }
 
+    /**
+     * Com {@code atlas.edge.resolve-targets} (edge em pod do k3s), nome de container e {@code host.docker.internal}
+     * viram IP antes do check; no compose o DNS do Docker ja resolve e o alvo vai como veio.
+     */
+    LocalChecks.Resolver resolver() {
+        if (!config.resolveTargets()) {
+            return () -> java.util.function.UnaryOperator.identity();
+        }
+        DockerClient docker = config.docker().map(d -> DockerClient.of(URI.create(d), config.timeout())).orElse(null);
+        return new TargetResolver(docker, config.hostGateway(), config.nodeIp().orElse(null))::snapshot;
+    }
+
     private List<TopologySource> withChecks(List<TopologySource> sources) {
         List<TopologySource> all = new ArrayList<>(sources);
         if (!checks.isEmpty()) {
-            all.add(new LocalChecks(() -> checks, config.timeout(), Clock.systemUTC(), ttl));
+            all.add(new LocalChecks(() -> checks, resolver(), config.timeout(), Clock.systemUTC(), ttl));
         }
         return all;
     }
