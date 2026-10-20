@@ -29,8 +29,9 @@ spec:
 # Checks locais (backend de cada servico do services.yml e API do Traefik) e o que o edge do compose alcancava.
 # O edge traduz o alvo para IP (TargetResolver): container -> IP na bridge do Docker (172.16.0.0/12, que inclui o
 # docker0 172.17.0.1 de host.docker.internal) e NodePort -> pod depois do DNAT do kube-proxy (10.42.0.0/16, o
-# podCIDR padrao do k3s). So TCP e so faixa privada: nada de internet. No host com Docker 29 o pod so passa para
-# as bridges com a regra DOCKER-USER do infra (10.42.0.0/24 -> br-*/docker0); a VPS (Docker 27) ja aceita.
+# podCIDR padrao do k3s). So TCP e so faixa privada: nada de internet. O trafego que a policy libera sai marcado
+# pelo kube-router (0x20000) e o FORWARD o aceita antes das chains do Docker, entao basta esta policy (host com
+# Docker 29 e VPS com Docker 27); a regra DOCKER-USER do infra (#38) fica so como plano B.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
