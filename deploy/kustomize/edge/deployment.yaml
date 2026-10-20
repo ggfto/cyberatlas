@@ -43,6 +43,12 @@ spec:
             - {name: ATLAS_EDGE_CA_FILE, value: /etc/atlas/ca.crt}
             - {name: ATLAS_EDGE_DOCKER, value: "tcp://127.0.0.1:2375"}
             - {name: ATLAS_EDGE_KUBERNETES, value: "true"}
+            # No pod nao ha DNS do Docker nem host-gateway: o edge traduz nome de container -> IP (listagem do Docker),
+            # host.docker.internal -> 172.17.0.1 e loopback -> IP do no antes de cada check (TargetResolver)
+            - {name: ATLAS_EDGE_RESOLVE_TARGETS, value: "true"}
+            - name: ATLAS_EDGE_NODE_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.hostIP}
             # So no primeiro start (sem credencial no PVC). Secret criado a mao pelo enroll.sh e apagado depois;
             # nao esta no git nem no Argo. Ausente = o edge sobe com a credencial do PVC.
             - name: ATLAS_EDGE_TOKEN

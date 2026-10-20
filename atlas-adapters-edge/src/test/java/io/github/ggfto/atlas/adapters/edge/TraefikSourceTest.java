@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.net.URI;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -90,6 +91,16 @@ class TraefikSourceTest {
         try (FakeHttp f = new FakeHttp(Map.of())) {
             IOException e = assertThrows(IOException.class, () -> collect(f));
             assertEquals("traefik GET /api/http/routers: HTTP 500", e.getMessage());
+        }
+    }
+
+    @Test
+    void apiDoTraefikPorNomeDeContainerPassaPeloTradutor() throws Exception {
+        try (FakeHttp f = fake()) {
+            URI byName = URI.create("http://traefik:" + f.base().getPort() + "/");
+            Fragment frag = new TraefikSource("vps", byName, () -> u -> TargetResolver.resolve(u, Map.of("traefik", "127.0.0.1"), null, null),
+                    Duration.ofSeconds(5), CLOCK, Duration.ofSeconds(90)).collect();
+            assertEquals(State.ONLINE, frag.observations().stream().filter(o -> o.nodeKey().equals("route:logs.gf2.in")).findFirst().orElseThrow().state());
         }
     }
 }

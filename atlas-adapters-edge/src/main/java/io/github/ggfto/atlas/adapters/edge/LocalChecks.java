@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.function.UnaryOperator;
 import java.util.function.Supplier;
 
 /**
@@ -22,13 +23,24 @@ public final class LocalChecks implements TopologySource {
     public record Target(String nodeKey, URI url, Expectation expectation) {
     }
 
+    /** Tradutor de host da rodada; se a listagem do Docker falhar, o alvo vai como veio. */
+    public interface Resolver {
+        UnaryOperator<URI> snapshot() throws Exception;
+    }
+
     private final Supplier<List<Target>> targets;
+    private final Resolver resolver;
     private final HttpProber prober;
     private final Clock clock;
     private final Duration ttl;
 
     public LocalChecks(Supplier<List<Target>> targets, Duration timeout, Clock clock, Duration ttl) {
+        this(targets, () -> UnaryOperator.identity(), timeout, clock, ttl);
+    }
+
+    public LocalChecks(Supplier<List<Target>> targets, Resolver resolver, Duration timeout, Clock clock, Duration ttl) {
         this.targets = targets;
+        this.resolver = resolver;
         this.prober = new HttpProber(timeout);
         this.clock = clock;
         this.ttl = ttl;
@@ -48,9 +60,16 @@ public final class LocalChecks implements TopologySource {
                 throw new IllegalArgumentException("check local so http/https: " + t.url());
             }
         }
+        UnaryOperator<URI> resolve;
+        try {
+            resolve = resolver.snapshot();
+        } catch (Exception e) {
+            resolve = UnaryOperator.identity();
+        }
+        UnaryOperator<URI> r = resolve;
         try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
             var futures = all.stream().map(t -> pool.submit(() -> t.expectation()
-                    .classify(t.nodeKey(), prober.probe(t.url()), clock.instant(), ttl, Expectation.LOCAL))).toList();
+                    .classify(t.nodeKey(), prober.probe(r.apply(t.url())), clock.instant(), ttl, Expectation.LOCAL))).toList();
             List<Observation> obs = new ArrayList<>();
             for (var f : futures) {
                 obs.add(f.get());
