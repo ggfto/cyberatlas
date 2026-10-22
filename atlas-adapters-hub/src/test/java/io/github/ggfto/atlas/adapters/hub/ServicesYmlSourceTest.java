@@ -150,6 +150,34 @@ class ServicesYmlSourceTest {
     }
 
     @Test
+    void optionalIconOverridesArePreservedWithoutChangingAbsentAttributes() {
+        String yaml = """
+                zone: exemplo.test
+                services:
+                  painel:
+                    subdomain: painel
+                    backend: http://painel:80
+                    exposure: externo
+                    icon: ' redis '
+                  simples:
+                    subdomain: simples
+                    backend: http://simples:80
+                    exposure: local
+                  vazio:
+                    subdomain: vazio
+                    backend: http://vazio:80
+                    exposure: local
+                    icon: '   '
+                """;
+        Map<String, Node> nodes = byKey(collect("host", yaml));
+        assertEquals(Map.of("backend", "http://painel:80", "exposure", "externo", "auth", "false", "icon", "redis"),
+                nodes.get("service:host/painel").attributes());
+        assertEquals(Map.of("backend", "http://simples:80", "exposure", "local", "auth", "false"),
+                nodes.get("service:host/simples").attributes());
+        assertFalse(nodes.get("service:host/vazio").attributes().containsKey("icon"));
+    }
+
+    @Test
     void tunnelIdIsKnownInsideButNeverANodeAttribute() {
         ServicesYmlSource vps = new ServicesYmlSource("vps", () -> fixture("services-vps.yml"), CLOCK);
         assertEquals(java.util.Optional.of("00000000-0000-0000-0000-00000000bbbb"), vps.tunnelId());

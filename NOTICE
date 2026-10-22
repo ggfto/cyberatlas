@@ -10,3 +10,11 @@ Ideias de desenho reaproveitadas (nenhum codigo copiado):
 - HiveKeeper (https://github.com/ggfto/HiveKeeper): o padrao do mapa em React Flow com o layout como
   funcao pura e testada, e o protocolo agente -> gateway (WebSocket de saida, enrollment por token de uso
   unico com CSR e CN atribuido pelo servidor, mTLS com renovacao, registro por sessao na reconexao).
+
+Terceiros redistribuidos (ativos binarios, nao codigo):
+
+- dashboard-icons (https://github.com/homarr-labs/dashboard-icons), Apache License 2.0,
+  Copyright (c) 2024 Bjorn Lammers, Meier Lukas, Thomas Camlong e Homarr Labs. Alguns SVGs
+  estao congelados em atlas-web/src/icons/vendor/dashboard-icons (commit
+  320c819da84048d5a3066e2578bfa83be9019fdf), vendorizados sem modificacao para honrar a CSP
+  img-src 'self' data: do atlas-web. Ver a copia da LICENSE naquela pasta.

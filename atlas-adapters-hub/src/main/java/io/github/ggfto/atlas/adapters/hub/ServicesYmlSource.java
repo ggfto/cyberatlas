@@ -34,7 +34,7 @@ public final class ServicesYmlSource implements TopologySource {
     }
 
     private record Service(String name, String subdomain, String subdomainExterno, String backend, Exposure exposure,
-                           boolean auth) {
+                           boolean auth, String icon) {
     }
 
     private record Route(String fqdn, String entry, String exposure, boolean publicCheck) {
@@ -65,8 +65,16 @@ public final class ServicesYmlSource implements TopologySource {
         nodes.put(traefik, new Node(traefik, NodeKind.TRAEFIK, "Traefik", machine, Map.of()));
         for (Service s : p.services()) {
             String service = "service:" + machine + "/" + s.name();
-            nodes.put(service, new Node(service, NodeKind.SERVICE, s.name(), machine, Map.of(
-                    "backend", s.backend(), "exposure", lower(s.exposure()), "auth", String.valueOf(s.auth()))));
+            // o icon so entra no mapa quando declarado: assim o atlas-web ouve "override" e o Map.of continua
+            // o mesmo para quem nao usa icone (sem rebocar os testes antigos de atributos exatos).
+            Map<String, String> attrs = new LinkedHashMap<>();
+            attrs.put("backend", s.backend());
+            attrs.put("exposure", lower(s.exposure()));
+            attrs.put("auth", String.valueOf(s.auth()));
+            if (s.icon() != null && !s.icon().isBlank()) {
+                attrs.put("icon", s.icon().trim());
+            }
+            nodes.put(service, new Node(service, NodeKind.SERVICE, s.name(), machine, Map.copyOf(attrs)));
             for (Route r : routes(s, p.zone())) {
                 String entry = "entry:" + machine + "/" + r.entry();
                 nodes.putIfAbsent(entry, new Node(entry, NodeKind.ENTRY, entryName(r.entry()), machine, Map.of("via", r.entry())));
@@ -167,7 +175,7 @@ public final class ServicesYmlSource implements TopologySource {
             String name = String.valueOf(e.getKey());
             Map<?, ?> s = (Map<?, ?>) e.getValue();
             services.add(new Service(name, str(s.get("subdomain")), str(s.get("subdomain_externo")), str(s.get("backend")),
-                    exposure(name, s.get("exposure")), Boolean.TRUE.equals(s.get("auth"))));
+                    exposure(name, s.get("exposure")), Boolean.TRUE.equals(s.get("auth")), str(s.get("icon"))));
         }
         return new Parsed(zone, services);
     }
