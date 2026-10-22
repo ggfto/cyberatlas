@@ -13,7 +13,11 @@ const KIND_LABEL = {
 /** Um no do mapa: nome, tipo, ponto de estado e o motivo (o "porque" do estado, sempre visivel no hover). */
 export function InfraNode({ data }) {
   return (
-    <div className="min-w-[200px] rounded-lg border border-border bg-card px-3 py-2 shadow-sm" title={data.reason}>
+    <div
+      className={`min-w-[200px] rounded-lg border bg-card px-3 py-2 shadow-sm ${data.focused ? 'border-primary ring-2 ring-primary' : 'border-border'}`}
+      title={data.reason}
+      data-focused={data.focused ? 'true' : undefined}
+    >
       <Handle type="target" position={Position.Left} />
       <div className="flex items-center gap-2">
         <span className="truncate text-sm font-medium">{data.label}</span>
@@ -52,8 +56,10 @@ const NODE_TYPES = { infra: InfraNode, machineGroup: MachineGroup }
 /**
  * Canvas do mapa (molde do InfraMap do HiveKeeper). Nos e arestas vem prontos de buildInfraTopology (+ layout
  * manual). Com `editable`, arrastar move o no na tela e, ao soltar, chama `onMove(no)` para gravar a posicao.
+ * Com `focus` (chave de um no), o enquadramento inicial e nesse no em vez do mapa inteiro.
  */
-export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, height = 'h-[72vh]' }) {
+export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, focus, height = 'h-[72vh]' }) {
+  const hasFocus = focus && nodes.some((n) => n.id === focus)
   const [local, setLocal] = useState(nodes)
   useEffect(() => setLocal(nodes), [nodes])
   return (
@@ -63,6 +69,7 @@ export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, 
         edges={edges}
         nodeTypes={NODE_TYPES}
         fitView
+        fitViewOptions={hasFocus ? { nodes: [{ id: focus }], maxZoom: 1.5 } : undefined}
         nodesConnectable={false}
         nodesDraggable={editable}
         onNodesChange={(changes) => setLocal((cur) => applyNodeChanges(changes, cur))}

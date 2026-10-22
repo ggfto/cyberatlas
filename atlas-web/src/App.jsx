@@ -3,16 +3,14 @@ import { MriPageHeader } from '@mriqbox/ui-kit'
 import { Network } from 'lucide-react'
 import { InfraMap } from './components/InfraMap.jsx'
 import { buildInfraTopology } from './lib/topology.js'
-import { applyPatch } from './lib/patch.js'
 import { LogPanel } from './components/LogPanel.jsx'
 import { MAX_TABS } from './lib/logTabs.js'
 import { applyLayout, saveMove } from './lib/layout.js'
+import { fetchManualLayout, useTopology } from './lib/useTopology.js'
 
 const WITH_LOGS = new Set(['CONTAINER', 'POD'])
 
 export default function App() {
-  const [snapshot, setSnapshot] = useState({ nodes: [], edges: [] })
-  const [error, setError] = useState(null)
   const [logsOn, setLogsOn] = useState(false)
   const [logTargets, setLogTargets] = useState([])
   const [me, setMe] = useState(null)
@@ -33,13 +31,10 @@ export default function App() {
 
   useEffect(() => {
     checkSession()
-    fetch('/api/layout', { headers: { Accept: 'application/json' } })
-      .then(async (r) => {
-        const rows = r.ok ? await r.json() : []
-        if (Array.isArray(rows)) setManual(Object.fromEntries(rows.map((p) => [p.nodeKey, p])))
-      })
-      .catch(() => {})
+    fetchManualLayout().then(setManual)
   }, [checkSession])
+  // se o stream cai porque a sessao expirou, a reconexao nunca vai passar: /api/me diz
+  const { snapshot, error, setError } = useTopology(checkSession)
 
   useEffect(() => {
     // logs so existem com atlas.logs.enabled no hub (desligado ate a F5): 404 aqui e o mapa fica sem painel
@@ -58,35 +53,6 @@ export default function App() {
     },
     [logsOn],
   )
-
-  useEffect(() => {
-    // Stream (F3): snapshot ao conectar e patch a cada mudanca; o EventSource reconecta sozinho mandando o
-    // Last-Event-ID. Sem EventSource (ambiente antigo/teste), uma leitura simples.
-    if (typeof EventSource !== 'undefined') {
-      const es = new EventSource('/api/topology/stream')
-      es.addEventListener('snapshot', (ev) => {
-        setError(null)
-        setSnapshot(JSON.parse(ev.data))
-      })
-      es.addEventListener('patch', (ev) => setSnapshot((cur) => applyPatch(cur, JSON.parse(ev.data))))
-      es.addEventListener('error', () => {
-        setError('stream interrompido, reconectando')
-        // o EventSource nao diz o status: se foi a sessao que expirou, a reconexao nunca vai passar
-        checkSession()
-      })
-      return () => es.close()
-    }
-    const ctrl = new AbortController()
-    fetch('/api/topology', { signal: ctrl.signal, headers: { Accept: 'application/json' } })
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
-        setSnapshot(await r.json())
-      })
-      .catch((e) => {
-        if (e.name !== 'AbortError') setError(e.message)
-      })
-    return () => ctrl.abort()
-  }, [checkSession])
 
   const graph = useMemo(() => {
     const g = buildInfraTopology(snapshot)
