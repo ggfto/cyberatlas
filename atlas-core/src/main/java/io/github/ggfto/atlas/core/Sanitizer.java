@@ -19,7 +19,9 @@ public final class Sanitizer {
             Map.entry(NodeKind.ENTRY, Set.of("via")),
             Map.entry(NodeKind.AUTHGATE, Set.of("provider")),
             Map.entry(NodeKind.ROUTE, Set.of("fqdn", "exposure", "auth", "url")),
-            Map.entry(NodeKind.SERVICE, Set.of("backend", "exposure", "auth")),
+            // icon e um override declarativo do services.yml (slug de dashboard-icons): nao e segredo nem
+            // pista de rede, e o atlas-web precisa dele para pintar o icone certo no mapa (issue #24).
+            Map.entry(NodeKind.SERVICE, Set.of("backend", "exposure", "auth", "icon")),
             Map.entry(NodeKind.CONTAINER, Set.of("image", "state", "status", "health", "compose_project", "compose_service")),
             Map.entry(NodeKind.ROUTER, Set.of("rule", "service", "status", "provider")),
             Map.entry(NodeKind.POD, Set.of("namespace", "phase", "ready", "restarts", "owner", "image", "nodeports")),

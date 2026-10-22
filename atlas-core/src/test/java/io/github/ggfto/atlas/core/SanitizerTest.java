@@ -50,6 +50,17 @@ class SanitizerTest {
     }
 
     @Test
+    void serviceKeepsIconOverrideButKeepsDroppingAttributesOutOfTheAllowlist() {
+        // garante que o override "icon" do services.yml (issue #24) sobrevive ao sanitizer e que a
+        // allowlist continua apertada: um atributo nao declarado (env.*) e descartado no mesmo no.
+        Node n = new Node("service:vps/portainer", NodeKind.SERVICE, "portainer", "vps", Map.of(
+                "backend", "http://portainer:9000", "exposure", "externo", "auth", "true",
+                "icon", "portainer", "env.ADMIN_PASSWORD", "segredo"));
+        assertEquals(Map.of("backend", "http://portainer:9000", "exposure", "externo", "auth", "true",
+                "icon", "portainer"), Sanitizer.DEFAULT.sanitize(n).attributes());
+    }
+
+    @Test
     void routerPodAndWorkloadHaveTheirOwnLists() {
         assertEquals(Map.of("rule", "Host(`ha.gf2.in`)", "service", "ha@file", "status", "enabled"),
                 Sanitizer.DEFAULT.sanitize(new Node("router:vps/ha", NodeKind.ROUTER, "ha", "vps", Map.of(
