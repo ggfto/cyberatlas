@@ -15,12 +15,12 @@ flowchart LR
   subgraph VPS["VPS (ARM64)"]
     hub["atlas hub (k3s, Argo)<br/>:8080 publico via Traefik + OIDC<br/>:8443 so WG/cluster: mTLS edges + break-glass"]
     pg[("Postgres atlas<br/>layout, edges, versoes")]
-    edgeV["atlas edge (compose)<br/>Docker, k3s, Traefik, checks locais, logs"]
-    spV["socket-proxy local<br/>so rede interna do edge"]
+    edgeV["atlas edge (Deployment no k3s, Argo)<br/>Docker, k3s, Traefik, checks locais, logs"]
+    spV["socket-proxy (sidecar)<br/>so loopback do pod"]
   end
   subgraph HOST["Host (x86_64)"]
-    edgeH["atlas edge (compose)"]
-    spH["socket-proxy local"]
+    edgeH["atlas edge (Deployment no k3s, Argo)"]
+    spH["socket-proxy (sidecar)"]
   end
   cf["API Cloudflare<br/>token read-only"]
   argo["Argo CD API<br/>conta readonly"]
@@ -187,7 +187,11 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 - `PATCH /api/layout/nodes[/{key}]` (§3.2).
 - `GET /api/logs/targets`.
 - `GET /api/logs/stream?node=&container=&tail=&filter=&regex=` (SSE; papel `atlas-admins`).
-- Admin: `POST /api/edges`, `POST /api/edges/{id}/revoke`, `POST /api/edges/{id}/re-enroll`, `GET /api/edges`.
+- `GET /api/sources` (`atlas-viewers` ou `atlas-admins`): saúde de cada fonte do hub com o último erro, para uma fonte quebrada não só sumir do mapa.
+- `GET /api/me` (`atlas-viewers` ou `atlas-admins`): nome e papéis do atlas da sessão (só `atlas-viewers`/`atlas-admins`).
+- `GET /api/history?node=&limit=50` (`atlas-viewers` ou `atlas-admins`): `status_change` de um nó (§3.3).
+- `GET /api/audit?limit=100` (`atlas-admins`): últimas entradas de `audit`.
+- Admin (`atlas-admins`): `POST /api/edges`, `POST /api/edges/{id}/revoke`, `POST /api/edges/{id}/re-enroll`, `GET /api/edges`.
 - Limites de SSE e log como no v1 §2.4:
   - buffer por assinante com `dropped`;
   - um follow por alvo no edge, com fan-out no hub;
@@ -240,10 +244,11 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 
 ## 5. Onde roda e anti-lockout
 - **Hub no k3s da VPS**, via Argo **multi-source**: a base fica no repo (`deploy/kustomize`) e o overlay, a versão por digest, a rota, o Authentik e o NodePort WG ficam no `infra`. Mais um Postgres pequeno (StatefulSet com PVC), com `pg_dump` diário para o R2 . O hub é **painel, não base**. Argo fora não derruba o hub, que continua rodando e mostra o Argo vermelho. VPS fora derruba o mapa, e quem avisa é o **monitor externo**.
-- **Edge como container Docker (compose), não DaemonSet do k3s, nas duas máquinas.** **Superado na F6:** o edge roda como Deployment no k3s de cada máquina (`deploy/kustomize/edge/`, socket-proxy como sidecar), porque no compose ele não alcança a 6443 do k3s; o compose ficou só como referência e a perda (k3s fora = edge fora) está registrada em `deploy/README.md`. O texto abaixo é a decisão original.
-  - Motivo: se o k3s da máquina quebrar, um edge que roda **fora** dele continua vendo o Docker e reporta "k3s fora". Dentro do k3s ele morreria junto.
-  - Compose no `infra` (`host/atlas-edge/`, `vps/atlas-edge/`), com digest fixo, ao lado do socket-proxy local. O edge lê o k3s pelo kubeconfig do SA `atlas-edge`.
-  - Não entra na camada base (não é preciso para consertar nada). Mas não depende do Argo, o que o torna útil justamente quando o Argo/k3s estão mal.
+- **Edge como Deployment no k3s de cada máquina, gerido pelo Argo** (decisão de 2026-10-19).
+  - Base no repo (`deploy/kustomize/edge/`: Deployment com o edge + socket-proxy como sidecar, SA só leitura, PVC com a credencial, NetworkPolicy) e overlays no `infra` (`k8s/vps/atlas-edge`, `k8s/host/atlas-edge`), com digest fixo. O edge lê o k3s pela SA `atlas-edge` in-cluster.
+  - Por que saiu do compose (a decisão original era compose): lá o edge não alcança a 6443 do k3s, que o firewall das duas máquinas só abre para pod e WG. O compose (`deploy/compose/edge/`) ficou só como referência.
+  - **Trade-off aceito em 2026-10-19:** o motivo original do compose era sobreviver ao k3s fora (um edge **fora** do k3s continuaria vendo o Docker e reportaria "k3s fora"). Dentro do k3s ele cai junto, e o mapa mostra isso como "edge sem conexão" (`unknown` com motivo, §3.3). Os outros custos (proxy dividindo a rede do pod, `supplementalGroups` no pod inteiro, hostPath exigindo namespace sem Pod Security baseline/restricted) estão em `deploy/README.md`.
+  - Não entra na camada base (não é preciso para consertar nada).
 - **Pré-requisito de rede:** o NodePort da porta 8443 precisa responder pelo `wg0`. O WS do edge do host e o break-glass usam o mesmo caminho, então **consertar o NodePort em `wg0`** (firewall / kube-proxy) é pré-requisito da fatia do edge remoto (F3).
 
 ## 6. Fatias (PRs pequenos, RED antes; você verifica cada uma)
@@ -255,7 +260,7 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 | **F3** | edge **remoto** (host pelo WG), com o pré-requisito NodePort `wg0`; adapters do hub `cloudflare` e `argocd`; `wireguard` (**não implementado**, segue planejado); SSE `/api/topology/stream` com patch e `Last-Event-ID`; drift (outofsync, sem-application, imagem flutuante, dns × services.yml) | testes com fakes HTTP da Cloudflare e do Argo, incluindo erro, timeout e paginação; o payload não contém IP de registro A nem `tunnel_id`; drift dns × services.yml com fixtures reais sanitizados | conferir pelo WG que o edge do host aparece; desligar o WG de propósito no lab (se o operador topar) e ver `unknown` |
 | **F4** | logs: `LogOpen`/`LogLines`/`Credit` no edge (docker + k8s), redação no edge e no hub, fan-out e limites no hub, SSE para o browser, painel com abas | assinante lento recebe `dropped` sem travar os outros nem o edge; sem crédito, o edge descarta e conta; 5 abas no mesmo pod = 1 follow no edge; linha > 16 KiB cortada; padrões redigidos; filtro RE2J com regex patológica termina em tempo linear | carga sintética: contar os follows no edge e ver `dropped` aparecer |
 | **F5** | auth: OIDC Authentik + papéis (logs só `atlas-admins`), break-glass na 8443 só WG, auditoria; persistência: Postgres + Flyway, `PATCH` de layout com `If-Match`/409, histórico de 7 dias | sem sessão = 401 em API e SSE; viewer não abre log (403 na rota **e** no `LogOpen`); login local na 8080 recusado; dois PATCH concorrentes = um 409; reconciliador não toca `layout_node` (teste) | o operador testa o login; você confere o 409 e o break-glass pelo WG |
-| **F6** | deploy: base kustomize no repo; PR no `infra` com overlay + rota + blueprint Authentik `80-atlas-oidc` + RBAC dos 2 clusters + compose do edge e socket-proxy nas 2 máquinas + Postgres + backup R2; promoção `stable` | Application Synced/Healthy; o edge das 2 máquinas conectado; o mapa mostra a infra real; restore do `pg_dump` testado num pod descartável | revisão do PR do `infra` pelo operador; você confere o mapa contra o `docs/reestruturacao.md` §1 |
+| **F6** | deploy: base kustomize no repo; PR no `infra` com overlay + rota + blueprint Authentik `80-atlas-oidc` + RBAC dos 2 clusters + overlays `k8s/{vps,host}/atlas-edge` (edge como Deployment no k3s via Argo, socket-proxy como sidecar) nas 2 máquinas + Postgres + backup R2; promoção `stable` | Application Synced/Healthy; o edge das 2 máquinas conectado; o mapa mostra a infra real; restore do `pg_dump` testado num pod descartável | revisão do PR do `infra` pelo operador; você confere o mapa contra o `docs/reestruturacao.md` §1 |
 
 **O MVP fecha na F6:** mapa da infra atual ao vivo, status real (§1.4), logs ao vivo pelo edge e Cloudflare.
 
