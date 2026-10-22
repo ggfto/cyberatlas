@@ -1,4 +1,4 @@
 /**
- * Frames edge-hub (Hello, Snapshot, Patch, LogOpen, LogLines, Credit, Heartbeat) e codec.
+ * Frames edge-hub (Hello, Welcome, Reject, Snapshot, Resync, Heartbeat, LogOpen, LogLines, Credit, LogClose) e codec.
  */
 package io.github.ggfto.atlas.protocol;

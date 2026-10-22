@@ -56,7 +56,7 @@ flowchart LR
 | `Hello(edgeId, protocolVersion, machine, capabilities[], adapterVersions{})` | edge → hub | identificação. **A identidade vem do CN do certificado**, não do `Hello`; o hub rejeita se divergirem |
 | `Welcome(sessionId, acceptedVersion, config{intervals, allowlists})` | hub → edge | aceita a versão (o hub suporta N e N-1) e manda a config de coleta. Versão fora da janela leva `Reject(reason)` e o edge **não** fica em loop de reconexão rápida |
 | `Snapshot(source, seq, observedAt, ttlMs, nodes[], edges[])` | edge → hub | estado completo de uma fonte, na conexão e periodicamente |
-| `Patch(source, seq, baseSeq, ops[])` | edge → hub | mudança incremental (eventos Docker, informers do k8s); `baseSeq` errado faz o hub pedir `Resync(source)` |
+| `Patch(source, seq, baseSeq, ops[])` | edge → hub | **planejado, não implementado**: hoje o edge manda só `Snapshot` periódico. Mudança incremental (eventos Docker, informers do k8s); `baseSeq` errado faria o hub pedir `Resync(source)` |
 | `Resync(source)` | hub → edge | pede um snapshot novo |
 | `LogOpen(streamId, target, container?, tail, since?, follow)` | hub → edge | abre um follow local |
 | `LogLines(streamId, seq, lines[], dropped)` | edge → hub | linhas já redigidas no edge (§4), em lotes de até 64 KB |
@@ -73,7 +73,7 @@ flowchart LR
 **Enrollment e identidade** (molde do HiveKeeper, simplificado para uma pessoa só):
 1. O admin cria o edge no hub (`POST /api/edges {machine}`) e recebe um **token de uso único**, válido 1 h.
 2. Na primeira subida, o edge gera o par de chaves **localmente** e manda um CSR para `POST /api/enrollments/{token}/certificate` (porta 8443, só WG/cluster). O hub assina com a **CA própria do atlas**, com **CN = edgeId atribuído pelo servidor** (o subject do CSR é ignorado), EKU `clientAuth` e validade de 90 dias. O token é consumido atomicamente.
-3. **Renovação** aos 30 dias do fim, autenticada pelo próprio certificado atual, sem trocar o par de chaves (`EnrollmentRenewal.java`).
+3. **Renovação** aos 30 dias do fim, autenticada pelo próprio certificado atual, sem trocar o par de chaves (molde `EnrollmentRenewal.java` do HiveKeeper). **Planejado, não implementado:** hoje um certificado perto do fim exige `POST /api/edges/{id}/re-enroll` + `enroll.sh`.
 4. **Revogação:** `POST /api/edges/{id}/revoke` faz o hub recusar o handshake e a renovação. Não precisa de CRL, porque o hub é o único verificador.
 5. A chave da CA do atlas fica em Secret do k8s e tem **cópia no cofre**, fora da infra .
 
@@ -82,11 +82,11 @@ Fontes **locais**, que precisam de acesso de dentro da máquina:
 
 | adapter | lê | permissão |
 |---|---|---|
-| `docker` (TopologySource + LogSource) | `GET /containers/json`, `GET /events`, `GET /containers/{id}/logs` | via **socket-proxy local**, que **não sai da máquina**: rede Docker interna só com o edge, `CONTAINERS=1 EVENTS=1 INFO=1 POST=0`, resto 0. Além disso, o cliente do edge tem **allowlist de endpoints no código**: `/containers/{id}/json` (inspect, que traz `Config.Env`) **nunca** é chamado, e há teste disso |
+| `docker` (TopologySource + LogSource) | `GET /containers/json`, `GET /events`, `GET /containers/{id}/logs` | via **socket-proxy local**, que **não sai da máquina**: rede Docker interna só com o edge (no k3s, sidecar no mesmo pod, ouvindo só no loopback), `wollomatic/socket-proxy` com allowlist só-GET por regex (`containers/json`, `events`, `containers/<id>/logs`). Além disso, o cliente do edge tem **allowlist de endpoints no código**: `/containers/{id}/json` (inspect, que traz `Config.Env`) **nunca** é chamado, e há teste disso |
 | `kubernetes` (TopologySource + LogSource) | informers de nodes, pods, deploy/sts/ds, services, ingress, IngressRoute; `pods/log` | ServiceAccount `atlas-edge` com ClusterRole **mínima** (molde `k8s/host/dozzle/rbac.yaml`): `get/list/watch` nesses recursos + `pods/log`; **sem** `secrets`, `configmaps`, `exec`, `portforward` nem escrita (§4) |
 | `traefik` | `/api/http/routers`, `/services` (com `serverStatus` UP/DOWN), `/middlewares` | API do Traefik **da própria máquina** pela rede Docker interna. **Dispensa a rota `api@internal` pelo WG**  |
 | `checks` locais | backend interno de cada serviço do `services.yml` (ex.: `http://fx-panel:8080/health`) e a rota `*.local.gf2.in` | rede do edge; o status do **upstream** vem daqui (§1.4) |
-| `wireguard` | sonda TCP no IP do WG do outro lado | sem `NET_ADMIN` |
+| `wireguard` (**planejado, não implementado**; sem issue aberta) | sonda TCP no IP do WG do outro lado | sem `NET_ADMIN` |
 
 ### 1.3 O que roda no hub
 Fontes **globais**:
@@ -111,14 +111,14 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 
 | necessidade | extensão Quarkus |
 |---|---|
-| REST + SSE para o browser | `quarkus-rest` (`Multi<…>` com `@RestStreamElementType`, `SseEventSink`) |
+| REST + SSE para o browser | `quarkus-rest-jackson` (`Multi<…>` com `@RestStreamElementType`, `SseEventSink`) |
 | WebSocket servidor (hub) e cliente (edge) | `quarkus-websockets-next` |
 | agendamento dos polls | `quarkus-scheduler` |
-| virtual threads nos adapters bloqueantes (HTTP de APIs) | `@RunOnVirtualThread` |
+| virtual threads nos adapters bloqueantes (HTTP de APIs, Docker, logs) | `Thread.ofVirtual()` / `Executors.newVirtualThreadPerTaskExecutor()` direto nos adapters |
 | k8s | `quarkus-kubernetes-client` (fabric8, suportado em native) |
 | Docker | **cliente próprio** sobre `UnixDomainSocketAddress` + `SocketChannel` do JDK, compatível com native. Implementa só os 3 GETs permitidos, com allowlist no código. Isso evita o docker-java (problemático em native) e é a própria garantia "nunca inspect" |
 | OIDC | `quarkus-oidc` (web-app com Authentik; `roles.role-claim-path=groups`) |
-| banco | `quarkus-hibernate-orm-panache` + `quarkus-jdbc-postgresql` + `quarkus-flyway` |
+| banco | `quarkus-jdbc-postgresql` + `quarkus-flyway`, com JDBC direto nos stores (sem Hibernate/Panache) |
 | front servido pelo hub | `quarkus-quinoa`, que builda o Vite e serve o estático |
 | métricas/saúde | `quarkus-smallrye-health` (`/q/health`) e `quarkus-micrometer` (opcional) |
 
@@ -126,11 +126,11 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 
 | módulo | conteúdo | depende de |
 |---|---|---|
-| `atlas-core` | records `Node`, `Edge`, `Status`, `Fragment`, `LogRequest`, `LogLine`; SPI `TopologySource`/`Watcher`/`LogSource`; **merge e correlação puros** (regras de estado, frescor, chaves); `Sanitizer` (allowlist por tipo) e `Redactor` (RE2J, ver abaixo) | só JDK + `com.google.re2j` |
+| `atlas-core` | records `Node`, `Edge`, `NodeStatus`/`State`, `Fragment`, `LogRequest`, `LogLine`; SPI `TopologySource`/`Watcher`/`LogSource`; **merge e correlação puros** (regras de estado, frescor, chaves); `Sanitizer` (allowlist por tipo) e `Redactor` (RE2J, ver abaixo) | só JDK + `com.google.re2j` |
 | `atlas-protocol` | frames do §1.1 + codec JSON (Jackson) | `atlas-core` |
-| `atlas-adapters-edge` | docker, kubernetes, traefik, checks locais, wireguard | `atlas-core` |
+| `atlas-adapters-edge` | docker, kubernetes, traefik, checks locais (`wireguard` planejado, não implementado: `EdgeKind.WIREGUARD` existe, mas nenhuma fonte o produz) | `atlas-core` |
 | `atlas-adapters-hub` | servicesyml, cloudflare, argocd, checks públicos | `atlas-core` |
-| `atlas-edge` | app Quarkus: cliente WS, enrollment, renovação, controle de fluxo de log | os 3 acima |
+| `atlas-edge` | app Quarkus: cliente WS, enrollment, controle de fluxo de log (renovação planejada, §1.1) | os 3 acima |
 | `atlas-hub` | app Quarkus: API, SSE, WS server, CA, registro de edges, OIDC, persistência | todos |
 | `atlas-web` | Vite + React 18 + `@xyflow/react` + `@mriqbox/ui-kit` + Vitest; `buildInfraTopology()` pura (molde do `topology.js` do HiveKeeper e das colunas do §4.2) | — |
 
@@ -149,10 +149,14 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 ### 3.1 Fato × apresentação (ideia do Homelable, `models.py:30-86` × `:227-307`)
 - **Fatos** (nós, arestas e estado descobertos) vivem **em memória** no hub, reconstruídos dos fragmentos das fontes. Não são persistidos: fonte é a verdade, e reiniciar o hub reconstrói tudo em segundos.
 - **Apresentação persistida** (Postgres), em tabelas pequenas:
-  - `layout_node(node_key, x, y, collapsed, pinned, rev, updated_by, updated_at)`: **só** o que o operador ajustou à mão; sem linha, vale o layout automático;
-  - `annotation(node_key, note, badges_manuais[], rev)`: rótulo/nota manual, opcional;
-  - `edge_registry(edge_id, machine, cert_fingerprint, enrolled_at, revoked_at, last_seen)` e `enrollment_token(hash, expires_at, consumed_at)`;
-  - `audit(at, user, action, target)`: abertura de log, login break-glass, enrollment, revogação.
+  - `layout_node(node_key, x, y, pinned, rev, updated_by, updated_at)` (`V1__apresentacao.sql`): **só** o que o operador ajustou à mão; sem linha, vale o layout automático;
+  - `status_change(node_key, from_state, to_state, reason, at)` (`V1`): histórico mínimo do §3.3;
+  - `edge(id, machine, status, cert_fingerprint, cert_serial, created_at, updated_at, revoked_at)` e `enrollment_token(token_sha256, edge_id, expires_at, used, created_at)` (`V2__edges.sql`);
+  - `audit(at, actor, action, target)` (`V1`): abertura de log, login break-glass, enrollment, revogação.
+
+  **Planejado, não implementado** (sem migration e sem issue aberta):
+  - coluna `collapsed` em `layout_node` (colapsar grupos);
+  - tabela `annotation(node_key, note, badges_manuais[], rev)`: rótulo/nota manual por nó.
 
   **`node_key` é a chave sintética estável por fonte** (ideia do Homelable, `pve-{host}-{vmid}`): `docker:<machine>/<container_name>`, `k8s:<cluster>/<ns>/<kind>/<name>`, `route:<fqdn>`, `cf-tunnel:<name>`, `traefik:<machine>`, `machine:<name>`. A posição manual sobrevive a recriação de container ou pod.
 
@@ -174,7 +178,7 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
   - `dns-sem-servico` / `servico-sem-dns` (Cloudflare × `services.yml`);
   - `rota-protegida-aberta` (§1.4);
   - `backend-container-inexistente` / `backend-nodeport-inexistente` (backend do `services.yml` aponta para container que o Docker da máquina não tem, ou para NodePort que nenhum Service do k3s da máquina expõe);
-  - `sem-breakglass`.
+  - `sem-breakglass` (**planejado, não implementado**).
 - **`management: base`** (anti-lockout): lista declarada na config (sshd, wg, k3s/docker, traefik, authentik+pg+redis, cloudflared, pihole). Os nós da lista recebem o selo "fora do Argo".
 
 ### 3.4 API para o browser
@@ -182,8 +186,8 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 - `GET /api/topology/stream` (SSE) manda `snapshot` e depois `patch`, com `Last-Event-ID`.
 - `PATCH /api/layout/nodes[/{key}]` (§3.2).
 - `GET /api/logs/targets`.
-- `GET /api/logs/stream?node=&container=&tail=&filter=&regex=` (SSE; papel `atlas-logs`).
-- Admin: `POST /api/edges`, `/revoke`, `GET /api/edges`.
+- `GET /api/logs/stream?node=&container=&tail=&filter=&regex=` (SSE; papel `atlas-admins`).
+- Admin: `POST /api/edges`, `POST /api/edges/{id}/revoke`, `POST /api/edges/{id}/re-enroll`, `GET /api/edges`.
 - Limites de SSE e log como no v1 §2.4:
   - buffer por assinante com `dropped`;
   - um follow por alvo no edge, com fan-out no hub;
@@ -236,7 +240,7 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 
 ## 5. Onde roda e anti-lockout
 - **Hub no k3s da VPS**, via Argo **multi-source**: a base fica no repo (`deploy/kustomize`) e o overlay, a versão por digest, a rota, o Authentik e o NodePort WG ficam no `infra`. Mais um Postgres pequeno (StatefulSet com PVC), com `pg_dump` diário para o R2 . O hub é **painel, não base**. Argo fora não derruba o hub, que continua rodando e mostra o Argo vermelho. VPS fora derruba o mapa, e quem avisa é o **monitor externo**.
-- **Edge como container Docker (compose), não DaemonSet do k3s, nas duas máquinas.**
+- **Edge como container Docker (compose), não DaemonSet do k3s, nas duas máquinas.** **Superado na F6:** o edge roda como Deployment no k3s de cada máquina (`deploy/kustomize/edge/`, socket-proxy como sidecar), porque no compose ele não alcança a 6443 do k3s; o compose ficou só como referência e a perda (k3s fora = edge fora) está registrada em `deploy/README.md`. O texto abaixo é a decisão original.
   - Motivo: se o k3s da máquina quebrar, um edge que roda **fora** dele continua vendo o Docker e reporta "k3s fora". Dentro do k3s ele morreria junto.
   - Compose no `infra` (`host/atlas-edge/`, `vps/atlas-edge/`), com digest fixo, ao lado do socket-proxy local. O edge lê o k3s pelo kubeconfig do SA `atlas-edge`.
   - Não entra na camada base (não é preciso para consertar nada). Mas não depende do Argo, o que o torna útil justamente quando o Argo/k3s estão mal.
@@ -248,7 +252,7 @@ Cada serviço tem **expectativas explícitas**, derivadas do `services.yml` e so
 | **F0** | repo, Maven multi-módulo, Quarkus, Quinoa + Vite, CI: testes JVM + **build native amd64 e arm64** + `@QuarkusIntegrationTest` no binário amd64, imagens **sem push** | CI verde nas duas arquiteturas; binário nativo sobe e responde `/q/health` | os logs da CI mostram os 2 builds nativos e o teste de integração no nativo |
 | **F1** | `atlas-core` (modelo, merge, frescor, Sanitizer, Redactor) + `servicesyml` + checks públicos com **expectativas do §1.4** + `GET /api/topology` + web `buildInfraTopology` com mapa estático; **spike** da policy por porta (§4) | testes de tabela do estado (pior fresco, vencido = unknown, edge fora ≠ offline); rota `auth:true` com 200 vira `degraded` "aberta"; 302 para outro host não conta como ok; fixture com segredos sai limpo do Sanitizer; spike documentado (funciona / plano B) | mutação nas regras de estado, no Sanitizer e nas expectativas de check |
 | **F2** | `atlas-protocol` + edge local na **mesma máquina do hub** (VPS, rede do cluster): enrollment (token → CSR → CN do servidor), mTLS, Hello/Welcome/versão, heartbeat, reconexão com jitter, **registro por sessão** (close atrasado não derruba); adapters `docker` (cliente UDS próprio), `kubernetes`, `traefik`, checks locais | testes: token usado 2x é recusado; CSR com outro CN sai com o CN do servidor; versão fora da janela leva `Reject` sem loop; close da sessão antiga depois da nova não remove o edge; **o cliente Docker nunca chama `/containers/{id}/json`** (teste contra um fake UDS que falha se chamado); snapshot na reconexão | subir hub + edge num kind/k3d + Docker local, derrubar a rede do edge e ver `unknown` com motivo e depois a volta |
-| **F3** | edge **remoto** (host pelo WG), com o pré-requisito NodePort `wg0`; adapters do hub `cloudflare` e `argocd`; `wireguard`; SSE `/api/topology/stream` com patch e `Last-Event-ID`; drift (outofsync, sem-application, imagem flutuante, dns × services.yml) | testes com fakes HTTP da Cloudflare e do Argo, incluindo erro, timeout e paginação; o payload não contém IP de registro A nem `tunnel_id`; drift dns × services.yml com fixtures reais sanitizados | conferir pelo WG que o edge do host aparece; desligar o WG de propósito no lab (se o operador topar) e ver `unknown` |
+| **F3** | edge **remoto** (host pelo WG), com o pré-requisito NodePort `wg0`; adapters do hub `cloudflare` e `argocd`; `wireguard` (**não implementado**, segue planejado); SSE `/api/topology/stream` com patch e `Last-Event-ID`; drift (outofsync, sem-application, imagem flutuante, dns × services.yml) | testes com fakes HTTP da Cloudflare e do Argo, incluindo erro, timeout e paginação; o payload não contém IP de registro A nem `tunnel_id`; drift dns × services.yml com fixtures reais sanitizados | conferir pelo WG que o edge do host aparece; desligar o WG de propósito no lab (se o operador topar) e ver `unknown` |
 | **F4** | logs: `LogOpen`/`LogLines`/`Credit` no edge (docker + k8s), redação no edge e no hub, fan-out e limites no hub, SSE para o browser, painel com abas | assinante lento recebe `dropped` sem travar os outros nem o edge; sem crédito, o edge descarta e conta; 5 abas no mesmo pod = 1 follow no edge; linha > 16 KiB cortada; padrões redigidos; filtro RE2J com regex patológica termina em tempo linear | carga sintética: contar os follows no edge e ver `dropped` aparecer |
 | **F5** | auth: OIDC Authentik + papéis (logs só `atlas-admins`), break-glass na 8443 só WG, auditoria; persistência: Postgres + Flyway, `PATCH` de layout com `If-Match`/409, histórico de 7 dias | sem sessão = 401 em API e SSE; viewer não abre log (403 na rota **e** no `LogOpen`); login local na 8080 recusado; dois PATCH concorrentes = um 409; reconciliador não toca `layout_node` (teste) | o operador testa o login; você confere o 409 e o break-glass pelo WG |
 | **F6** | deploy: base kustomize no repo; PR no `infra` com overlay + rota + blueprint Authentik `80-atlas-oidc` + RBAC dos 2 clusters + compose do edge e socket-proxy nas 2 máquinas + Postgres + backup R2; promoção `stable` | Application Synced/Healthy; o edge das 2 máquinas conectado; o mapa mostra a infra real; restore do `pg_dump` testado num pod descartável | revisão do PR do `infra` pelo operador; você confere o mapa contra o `docs/reestruturacao.md` §1 |
