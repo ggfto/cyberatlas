@@ -12,6 +12,7 @@
   "dependencies": {
     "@mriqbox/ui-kit": "^4.38.1",
     "@xyflow/react": "^12.12.0",
+    "html-to-image": "^1.11.11",
     "lucide-react": "^1.32.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
