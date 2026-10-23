@@ -1,6 +1,15 @@
 import { render, screen } from '@testing-library/react'
 import { ReactFlowProvider } from '@xyflow/react'
-import { InfraNode } from './InfraMap.jsx'
+import { InfraMap, InfraNode } from './InfraMap.jsx'
+
+describe('InfraMap', () => {
+  it('mantem os dois botoes de exportacao por padrao na pagina normal', () => {
+    render(<InfraMap nodes={[]} edges={[]} />)
+    expect(screen.getByRole('button', { name: 'exportar como PNG' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'exportar como SVG' })).toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(2)
+  })
+})
 
 describe('InfraNode', () => {
   it('mostra nome, tipo e o motivo do estado no hover', () => {
