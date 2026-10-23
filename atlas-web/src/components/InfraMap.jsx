@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ReactFlow, Background, Handle, Position, applyNodeChanges } from '@xyflow/react'
 import { Pin } from 'lucide-react'
+import { ServiceIcon } from './ServiceIcon.jsx'
 import '@xyflow/react/dist/style.css'
 import { ExportMapButton } from './ExportMapButton.jsx'
 
@@ -21,6 +22,7 @@ export function InfraNode({ data }) {
     >
       <Handle type="target" position={Position.Left} />
       <div className="flex items-center gap-2">
+        <ServiceIcon name={data.label} kind={data.kind} image={data.attributes?.image} icon={data.attributes?.icon} />
         <span className="truncate text-sm font-medium">{data.label}</span>
         {data.rev > 0 && <Pin className="h-3 w-3 shrink-0 text-muted-foreground" aria-label="posição manual" />}
         <span className={`ml-auto h-2 w-2 shrink-0 rounded-full ${DOT[data.state] || DOT.unknown}`} aria-label={data.state} />
