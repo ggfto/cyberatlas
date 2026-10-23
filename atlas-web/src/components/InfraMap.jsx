@@ -61,7 +61,7 @@ const NODE_TYPES = { infra: InfraNode, machineGroup: MachineGroup }
  * manual). Com `editable`, arrastar move o no na tela e, ao soltar, chama `onMove(no)` para gravar a posicao.
  * Com `focus` (chave de um no), o enquadramento inicial e nesse no em vez do mapa inteiro.
  */
-export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, focus, height = 'h-[72vh]' }) {
+export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, exportable = true, focus, height = 'h-[72vh]' }) {
   const hasFocus = focus && nodes.some((n) => n.id === focus)
   const [local, setLocal] = useState(nodes)
   useEffect(() => setLocal(nodes), [nodes])
@@ -80,7 +80,7 @@ export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, 
         onNodeClick={onNodeClick}
       >
         <Background />
-        <ExportMapButton />
+        {exportable && <ExportMapButton />}
       </ReactFlow>
     </div>
   )

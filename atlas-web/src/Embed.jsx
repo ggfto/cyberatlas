@@ -30,7 +30,7 @@ export default function Embed({ focus = null, theme = 'dark' }) {
   return (
     <div className="flex h-full flex-col gap-2 p-2" data-testid="embed">
       {error && <div className="text-sm text-red-500">Nao foi possivel carregar o mapa ({error}).</div>}
-      <InfraMap nodes={graph.nodes} edges={graph.edges} editable={false} focus={focus} height="h-full" />
+      <InfraMap nodes={graph.nodes} edges={graph.edges} editable={false} exportable={false} focus={focus} height="h-full" />
     </div>
   )
 }
