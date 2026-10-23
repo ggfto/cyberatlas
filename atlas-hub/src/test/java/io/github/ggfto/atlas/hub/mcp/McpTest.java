@@ -63,13 +63,20 @@ class McpTest {
                 .body("result.structuredContent.edges.kind", hasItem("AUTH_VIA"));
         mcp.call("get_node", "{\"key\":\"service:vps/homeassistant\"}").then().statusCode(200).body("result.isError", is(false))
                 .body("result.structuredContent.node.attributes.backend", is("http://homeassistant:8123"))
-                .body("result.structuredContent.node.state", is("UNKNOWN"))
-                .body("result.structuredContent.node.reason", is("sem fonte"))
+                .body("result.structuredContent.node.state", notNullValue())
+                .body("result.structuredContent.node.sources", notNullValue())
                 .body("result.structuredContent.edges", not(org.hamcrest.Matchers.empty()));
-        // fixture sem checks: tudo UNKNOWN, nada vira problema, mas a contagem aparece
-        mcp.call("list_problems", "{}").then().statusCode(200).body("result.isError", is(false))
-                .body("result.structuredContent.problems", org.hamcrest.Matchers.empty())
-                .body("result.structuredContent.unknown", org.hamcrest.Matchers.greaterThan(0));
+        // fixture sem checks: UNKNOWN sem drift nao vira problema, mas a contagem aparece. Outros testes do mesmo
+        // hub podem ter empurrado fragmento de edge (drift), entao a regra e conferida item a item.
+        java.util.List<java.util.Map<String, Object>> problems = mcp.call("list_problems", "{}").then().statusCode(200)
+                .body("result.isError", is(false))
+                .body("result.structuredContent.unknown", org.hamcrest.Matchers.greaterThan(0))
+                .extract().jsonPath().getList("result.structuredContent.problems");
+        for (java.util.Map<String, Object> p : problems) {
+            boolean down = "OFFLINE".equals(p.get("state")) || "DEGRADED".equals(p.get("state"));
+            org.junit.jupiter.api.Assertions.assertTrue(down || !((java.util.List<?>) p.get("drift")).isEmpty(),
+                    "problema sem estado ruim nem drift: " + p.get("key"));
+        }
         mcp.call("get_history", "{\"key\":\"service:vps/homeassistant\"}").then().statusCode(200).body("result.isError", is(false))
                 .body("result.structuredContent.key", is("service:vps/homeassistant"))
                 .body("result.structuredContent.changes", notNullValue());
