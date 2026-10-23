@@ -3,11 +3,24 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { InfraMap, InfraNode } from './InfraMap.jsx'
 
 describe('InfraMap', () => {
-  it('mantem os dois botoes de exportacao por padrao na pagina normal', () => {
-    render(<InfraMap nodes={[]} edges={[]} />)
+  it('pagina normal: os dois botoes de exportacao e os tres de zoom, sem o de travar interacao', () => {
+    const { container } = render(<InfraMap nodes={[]} edges={[]} />)
     expect(screen.getByRole('button', { name: 'exportar como PNG' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'exportar como SVG' })).toBeInTheDocument()
-    expect(screen.getAllByRole('button')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: 'aproximar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'afastar' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'enquadrar o mapa' })).toBeInTheDocument()
+    // o de travar/destravar ligaria o arrastar (que grava o layout) por fora do `editable`
+    expect(screen.queryByRole('button', { name: 'travar interacao' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button')).toHaveLength(5)
+    expect(container.querySelector('.react-flow__minimap')).not.toBeNull()
+  })
+
+  it('controls e exportable desligados (o /embed): nenhum botao, so o minimapa', () => {
+    const { container } = render(<InfraMap nodes={[]} edges={[]} controls={false} exportable={false} />)
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(container.querySelector('.react-flow__controls')).toBeNull()
+    expect(container.querySelector('.react-flow__minimap')).not.toBeNull()
   })
 })
 
