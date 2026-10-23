@@ -31,6 +31,8 @@
     <quarkus.platform.version>3.33.4</quarkus.platform.version>
     <!-- 2.8.2: ultima compilada contra Quarkus LTS (3.27.3); 2.8.3+ exigem APIs de 3.36+ -->
     <quarkus-quinoa.version>2.8.2</quarkus-quinoa.version>
+    <!-- 2.0.x: compilada contra Quarkus 3.33.3.1 (LTS); a 2.1.x ja exige 3.40 -->
+    <quarkus-mcp-server.version>2.0.3</quarkus-mcp-server.version>
     <compiler-plugin.version>3.14.0</compiler-plugin.version>
     <surefire-plugin.version>3.5.3</surefire-plugin.version>
     <skipITs>true</skipITs>
@@ -49,6 +51,11 @@
         <groupId>io.quarkiverse.quinoa</groupId>
         <artifactId>quarkus-quinoa</artifactId>
         <version>${quarkus-quinoa.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.quarkiverse.mcp</groupId>
+        <artifactId>quarkus-mcp-server-http</artifactId>
+        <version>${quarkus-mcp-server.version}</version>
       </dependency>
       <dependency>
         <groupId>io.github.ggfto.atlas</groupId>

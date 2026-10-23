@@ -28,7 +28,8 @@ import org.bouncycastle.crypto.generators.OpenBSDBCrypt;
  * Autenticacao do hub (design §4), um mecanismo so por cima do OIDC:
  * <ul>
  *   <li>browser: sessao OIDC do Authentik (code flow); API/teste: bearer do mesmo Authentik (modo hybrid);</li>
- *   <li>sem sessao em {@code /api}, SSE ou {@code /edge}: 401, nunca o redirect do code flow (o fetch/EventSource
+ *   <li>{@code /mcp} so por bearer: cookie de sessao nunca autentica ali (issue #26);</li>
+ *   <li>sem sessao em {@code /api}, {@code /mcp}, SSE ou {@code /edge}: 401, nunca o redirect do code flow (o fetch/EventSource
  *       nao segue login);</li>
  *   <li>Basic so como break-glass e so na porta TLS de edge (porta local da requisicao, provada no spike da F1);
  *       em qualquer outra porta, falha na hora, e a porta publica nunca anuncia Basic.</li>
@@ -66,7 +67,18 @@ public class AtlasAuthMechanism implements HttpAuthenticationMechanism {
             // bcrypt e caro de proposito: fora do event loop
             return Uni.createFrom().item(() -> check(up[0], up[1])).runSubscriptionOn(Infrastructure.getDefaultWorkerPool());
         }
+        if (mcp(ctx) && (h == null || !h.regionMatches(true, 0, "Bearer ", 0, 7))) {
+            // /mcp so por bearer (issue #26): o transporte MCP e rota Vert.x, o CsrfGuard (JAX-RS) nao roda nele, e o
+            // cookie de sessao SameSite=Lax chega de qualquer *.gf2.in. Sessao de browser nunca autentica o MCP.
+            return Uni.createFrom().failure(new AuthenticationFailedException("autenticacao requerida"));
+        }
         return oidc.authenticate(ctx, ipm);
+    }
+
+    /** O endpoint MCP ({@code /mcp} e o SSE legado em {@code /mcp/*}): cliente programatico, so bearer. */
+    static boolean mcp(RoutingContext ctx) {
+        String path = ctx.normalizedPath();
+        return path.equals("/mcp") || path.startsWith("/mcp/");
     }
 
     @Override
@@ -75,7 +87,8 @@ public class AtlasAuthMechanism implements HttpAuthenticationMechanism {
             return Uni.createFrom().item(new ChallengeData(401, "WWW-Authenticate", REALM));
         }
         if (programmatic(ctx)) {
-            return Uni.createFrom().item(new ChallengeData(401, null, null));
+            // a spec MCP pede o desafio Bearer no 401; o resto da API segue sem anunciar esquema
+            return Uni.createFrom().item(mcp(ctx) ? new ChallengeData(401, "WWW-Authenticate", "Bearer") : new ChallengeData(401, null, null));
         }
         return oidc.getChallenge(ctx);
     }
@@ -102,7 +115,7 @@ public class AtlasAuthMechanism implements HttpAuthenticationMechanism {
     static boolean programmatic(RoutingContext ctx) {
         String path = ctx.normalizedPath();
         String accept = ctx.request().getHeader("Accept");
-        return path.startsWith("/api/") || path.startsWith("/edge/") || (accept != null && accept.contains("text/event-stream"));
+        return path.startsWith("/api/") || path.startsWith("/edge/") || mcp(ctx) || (accept != null && accept.contains("text/event-stream"));
     }
 
     private SecurityIdentity check(String name, String password) {
