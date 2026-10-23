@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ReactFlow, Background, Handle, Position, applyNodeChanges } from '@xyflow/react'
 import { Pin } from 'lucide-react'
 import '@xyflow/react/dist/style.css'
+import { ExportMapButton } from './ExportMapButton.jsx'
 
 // verde online, ambar degradado, vermelho offline, cinza desconhecido (sem fonte fresca)
 const DOT = { online: 'bg-green-500', degraded: 'bg-amber-500', offline: 'bg-red-500', unknown: 'bg-muted-foreground' }
@@ -77,6 +78,7 @@ export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, 
         onNodeClick={onNodeClick}
       >
         <Background />
+        <ExportMapButton />
       </ReactFlow>
     </div>
   )

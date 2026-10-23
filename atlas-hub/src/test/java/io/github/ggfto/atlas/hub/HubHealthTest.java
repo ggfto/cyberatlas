@@ -39,6 +39,9 @@ class HubHealthTest {
                 .contentType(containsString("text/html"))
                 .header("Content-Security-Policy", containsString("frame-ancestors 'none'"))
                 .header("Content-Security-Policy", containsString("default-src 'self'"))
+                // img-src 'self' data: e condicao da exportacao do mapa (issue #25): sem data: nao da pra
+                // acionar download via <a href="data:...">, e sem recusar o resto o botao vazaria conteudo externo.
+                .header("Content-Security-Policy", containsString("img-src 'self' data:"))
                 .header("X-Content-Type-Options", is("nosniff"));
     }
 
