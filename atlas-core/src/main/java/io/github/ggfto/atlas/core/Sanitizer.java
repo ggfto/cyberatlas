@@ -44,9 +44,14 @@ public final class Sanitizer {
         Map<String, String> out = new LinkedHashMap<>();
         node.attributes().forEach((k, v) -> {
             if (keys.contains(k) && v != null) {
-                out.put(k, IPV4.matcher(v).replaceAll("<ip>"));
+                out.put(k, maskIpv4(v));
             }
         });
         return new Node(node.key(), node.kind(), node.name(), node.machine(), out);
+    }
+
+    /** IPv4 literal vira {@code <ip>}: a mesma mascara dos atributos, para quem precisa dela em texto livre. */
+    public static String maskIpv4(String text) {
+        return text == null ? null : IPV4.matcher(text).replaceAll("<ip>");
     }
 }
