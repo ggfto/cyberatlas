@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
-import { ReactFlow, Background, Handle, Position, applyNodeChanges } from '@xyflow/react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ReactFlow, Background, Controls, MiniMap, Handle, Position, applyNodeChanges, useReactFlow } from '@xyflow/react'
 import { Pin } from 'lucide-react'
 import { ServiceIcon } from './ServiceIcon.jsx'
 import '@xyflow/react/dist/style.css'
 import { ExportMapButton } from './ExportMapButton.jsx'
+import { FOCUS_FIT, NodeSearch } from './NodeSearch.jsx'
+import { focusNodeIds } from '../lib/neighbors.js'
 
 // verde online, ambar degradado, vermelho offline, cinza desconhecido (sem fonte fresca)
 const DOT = { online: 'bg-green-500', degraded: 'bg-amber-500', offline: 'bg-red-500', unknown: 'bg-muted-foreground' }
@@ -56,30 +58,66 @@ function MachineGroup({ data }) {
 
 const NODE_TYPES = { infra: InfraNode, machineGroup: MachineGroup }
 
+// Rotulos de acessibilidade do canvas em PT-BR (o padrao do React Flow e ingles).
+const ARIA_LABELS = {
+  'controls.ariaLabel': 'controles do mapa',
+  'controls.zoomIn.ariaLabel': 'aproximar',
+  'controls.zoomOut.ariaLabel': 'afastar',
+  'controls.fitView.ariaLabel': 'enquadrar o mapa',
+  'controls.interactive.ariaLabel': 'travar interacao',
+  'minimap.ariaLabel': 'minimapa',
+}
+
+/**
+ * Enquadra o `?focus=` e os vizinhos (issue #23) uma vez por foco, assim que o no aparece no mapa (o snapshot chega
+ * depois da montagem). O fitView do React Flow fica na fila ate os nos serem medidos, entao vale no primeiro render.
+ */
+function FocusFit({ ids }) {
+  const { fitView } = useReactFlow()
+  const done = useRef(null)
+  const focus = ids[0]
+  useEffect(() => {
+    if (!focus || done.current === focus) return
+    done.current = focus
+    fitView({ nodes: ids.map((id) => ({ id })), maxZoom: FOCUS_FIT.maxZoom, padding: FOCUS_FIT.padding })
+  }, [focus, ids, fitView])
+  return null
+}
+
 /**
  * Canvas do mapa (molde do InfraMap do HiveKeeper). Nos e arestas vem prontos de buildInfraTopology (+ layout
  * manual). Com `editable`, arrastar move o no na tela e, ao soltar, chama `onMove(no)` para gravar a posicao.
- * Com `focus` (chave de um no), o enquadramento inicial e nesse no em vez do mapa inteiro.
+ * Com `focus` (chave de um no), o enquadramento inicial e nesse no e nos vizinhos, e o no ganha destaque.
+ * `controls` mostra os botoes de zoom (sem o de travar/destravar, que ligaria o arrastar por fora do `editable`);
+ * o /embed desliga para continuar sem nenhum botao. Minimapa e busca (Ctrl/Cmd+K) so mexem no viewport.
  */
-export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, exportable = true, focus, height = 'h-[72vh]' }) {
-  const hasFocus = focus && nodes.some((n) => n.id === focus)
+export function InfraMap({ nodes, edges, onNodeClick, onMove, editable = false, exportable = true, controls = true, focus, height = 'h-[72vh]' }) {
   const [local, setLocal] = useState(nodes)
   useEffect(() => setLocal(nodes), [nodes])
+  const focusIds = useMemo(() => focusNodeIds(nodes, edges, focus), [nodes, edges, focus])
+  const shown = useMemo(
+    () => (focus ? local.map((n) => (n.id === focus ? { ...n, data: { ...n.data, focused: true } } : n)) : local),
+    [local, focus],
+  )
   return (
     <div className={`${height} w-full rounded-lg border border-border`} data-testid="infra-map">
       <ReactFlow
-        nodes={local}
+        nodes={shown}
         edges={edges}
         nodeTypes={NODE_TYPES}
         fitView
-        fitViewOptions={hasFocus ? { nodes: [{ id: focus }], maxZoom: 1.5 } : undefined}
         nodesConnectable={false}
         nodesDraggable={editable}
         onNodesChange={(changes) => setLocal((cur) => applyNodeChanges(changes, cur))}
         onNodeDragStop={(_, node) => onMove?.(node)}
         onNodeClick={onNodeClick}
+        ariaLabelConfig={ARIA_LABELS}
       >
         <Background />
+        {controls && <Controls showInteractive={false} />}
+        <MiniMap pannable zoomable />
+        <FocusFit ids={focusIds} />
+        <NodeSearch nodes={local} />
         {exportable && <ExportMapButton />}
       </ReactFlow>
     </div>
