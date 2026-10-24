@@ -7,9 +7,10 @@ import Embed from './Embed.jsx'
 import { parseEmbedParams, shouldRenderEmbed } from './lib/embed.js'
 
 const embed = shouldRenderEmbed(window)
+const params = parseEmbedParams(window.location.search)
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {embed ? <Embed {...parseEmbedParams(window.location.search)} /> : <App />}
+    {embed ? <Embed {...params} /> : <App focus={params.focus} />}
   </React.StrictMode>,
 )

@@ -10,7 +10,8 @@ import { fetchManualLayout, useTopology } from './lib/useTopology.js'
 
 const WITH_LOGS = new Set(['CONTAINER', 'POD'])
 
-export default function App() {
+/** Pagina do mapa. `focus` (de `/?focus=<node_key>`) enquadra o no e os vizinhos, como no /embed. */
+export default function App({ focus = null }) {
   const [logsOn, setLogsOn] = useState(false)
   const [logTargets, setLogTargets] = useState([])
   const [me, setMe] = useState(null)
@@ -75,7 +76,7 @@ export default function App() {
         </a>
       )}
       {error && <div className="text-sm text-red-500">Nao foi possivel carregar o mapa ({error}).</div>}
-      <InfraMap nodes={graph.nodes} edges={graph.edges} onNodeClick={openLogs} onMove={move} editable={admin} height={logTargets.length ? 'h-[40vh]' : undefined} />
+      <InfraMap nodes={graph.nodes} edges={graph.edges} onNodeClick={openLogs} onMove={move} editable={admin} focus={focus} height={logTargets.length ? 'h-[40vh]' : undefined} />
       {logTargets.length > 0 && (
         <LogPanel targets={logTargets} onClose={(key) => setLogTargets((cur) => cur.filter((t) => t.key !== key))} />
       )}
