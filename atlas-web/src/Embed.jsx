@@ -7,8 +7,9 @@ import { isFramed, openLoginPopup } from './lib/embed.js'
 
 /**
  * Mapa so leitura para o Home Assistant enquadrar (issue #19). Nada de admin: sem logs, sem edges/enrollment, sem
- * arrastar, sem botao. So GET (stream da topologia e posicoes manuais ja gravadas). `focus` enquadra e destaca um
- * no; `theme` troca dark/light no <html>.
+ * arrastar, sem botao (nem os de zoom: o minimapa e a roda do mouse bastam). So GET (stream da topologia e posicoes
+ * manuais ja gravadas). `focus` enquadra o no e os vizinhos e destaca o no; Ctrl/Cmd+K busca (so mexe no viewport);
+ * `theme` troca dark/light no <html>.
  *
  * Sem sessao (401 da API ou `end {reason:"auth"}` no stream) e dentro de moldura, o unico botao possivel: "Entrar
  * no atlas" (issue #20). O login nao cabe no iframe (o Authentik manda X-Frame-Options: DENY, de proposito); o botao
@@ -33,9 +34,8 @@ export default function Embed({ focus = null, theme = 'dark', framed = isFramed(
 
   const graph = useMemo(() => {
     const g = buildInfraTopology(snapshot)
-    const nodes = applyLayout(g.nodes, manual).map((n) => (n.id === focus ? { ...n, data: { ...n.data, focused: true } } : n))
-    return { ...g, nodes }
-  }, [snapshot, manual, focus])
+    return { ...g, nodes: applyLayout(g.nodes, manual) }
+  }, [snapshot, manual])
 
   return (
     <div className="flex h-full flex-col gap-2 p-2" data-testid="embed">
@@ -44,7 +44,7 @@ export default function Embed({ focus = null, theme = 'dark', framed = isFramed(
       ) : (
         error && <div className="text-sm text-red-500">Nao foi possivel carregar o mapa ({error}).</div>
       )}
-      <InfraMap nodes={graph.nodes} edges={graph.edges} editable={false} exportable={false} focus={focus} height="h-full" />
+      <InfraMap nodes={graph.nodes} edges={graph.edges} editable={false} exportable={false} controls={false} focus={focus} height="h-full" />
     </div>
   )
 }

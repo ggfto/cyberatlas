@@ -10,9 +10,10 @@ import { isLoginPopupPath, parseEmbedParams, shouldRenderEmbed } from './lib/emb
 const embed = shouldRenderEmbed(window)
 // o popup de login do /embed e top-level; enquadrado, vale a regra de sempre (so o Embed)
 const loginPopup = !embed && isLoginPopupPath(window.location.pathname)
+const params = parseEmbedParams(window.location.search)
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {embed ? <Embed {...parseEmbedParams(window.location.search)} /> : loginPopup ? <LoginPopup /> : <App />}
+    {embed ? <Embed {...params} /> : loginPopup ? <LoginPopup /> : <App focus={params.focus} />}
   </React.StrictMode>,
 )
