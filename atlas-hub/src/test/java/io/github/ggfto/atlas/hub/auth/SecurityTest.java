@@ -54,6 +54,33 @@ class SecurityTest {
         given().redirects().follow(false).when().get("/api/logs/stream?node=docker:vps/x").then().statusCode(401);
     }
 
+    /**
+     * Issue #20: a API que o /embed usa (layout e stream do mapa), chamada de dentro do iframe sem sessao, responde
+     * 401 e nunca o 302 do code flow (que morreria na moldura), mesmo com o header de navegacao de iframe que libera
+     * o shell do SPA. E o 401 que faz o /embed mostrar "Entrar no atlas".
+     */
+    @Test
+    void embedApiWithoutSessionIs401EvenFromAFrame() {
+        for (String dest : java.util.List.of("empty", "iframe")) {
+            given().redirects().follow(false).header("Sec-Fetch-Dest", dest).accept(ContentType.JSON).when().get("/api/layout")
+                    .then().statusCode(401).header("Location", org.hamcrest.Matchers.nullValue());
+            given().redirects().follow(false).header("Sec-Fetch-Dest", dest).accept("text/event-stream").when()
+                    .get("/api/topology/stream").then().statusCode(401).header("Location", org.hamcrest.Matchers.nullValue());
+        }
+    }
+
+    /**
+     * O /mcp (issue #26) tem permissao propria e so aceita bearer: a excecao do shell enquadrado (FramedShellPolicy,
+     * issue #20) nao vale ali. GET com Sec-Fetch-Dest: iframe e sem bearer continua 401, sem redirect.
+     */
+    @Test
+    void mcpFromAFrameWithoutBearerIs401() {
+        for (String path : java.util.List.of("/mcp", "/mcp/sse")) {
+            given().redirects().follow(false).header("Sec-Fetch-Dest", "iframe").accept(ContentType.HTML).when().get(path)
+                    .then().statusCode(401).header("Location", org.hamcrest.Matchers.nullValue());
+        }
+    }
+
     @Test
     void browserWithoutSessionIsSentToTheIdp() {
         given().redirects().follow(false).accept(ContentType.HTML).when().get("/").then().statusCode(302)
