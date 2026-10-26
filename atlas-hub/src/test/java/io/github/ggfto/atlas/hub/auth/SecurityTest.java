@@ -69,6 +69,23 @@ class SecurityTest {
         }
     }
 
+    /**
+     * O /mcp (issue #26) tem permissao propria e so aceita bearer: a excecao do shell enquadrado (FramedShellPolicy,
+     * issue #20) nao vale ali. GET com Sec-Fetch-Dest: iframe e sem bearer continua 401, sem redirect.
+     */
+    @Test
+    void mcpFromAFrameWithoutBearerIs401() {
+        // O mecanismo MCP tambem nega anonimos: so o status HTTP nao detecta a policy errada.
+        // Confere o contrato de configuracao alem da resposta para impedir a excecao do shell aqui.
+        var config = org.eclipse.microprofile.config.ConfigProvider.getConfig();
+        assertEquals("viewer", config.getValue("quarkus.http.auth.permission.mcp.policy", String.class));
+        assertEquals("/mcp,/mcp/*", config.getValue("quarkus.http.auth.permission.mcp.paths", String.class));
+        for (String path : java.util.List.of("/mcp", "/mcp/sse")) {
+            given().redirects().follow(false).header("Sec-Fetch-Dest", "iframe").accept(ContentType.HTML).when().get(path)
+                    .then().statusCode(401).header("Location", org.hamcrest.Matchers.nullValue());
+        }
+    }
+
     @Test
     void browserWithoutSessionIsSentToTheIdp() {
         given().redirects().follow(false).accept(ContentType.HTML).when().get("/").then().statusCode(302)
