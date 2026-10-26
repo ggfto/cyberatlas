@@ -39,7 +39,40 @@ Stdout contém somente access token; direcioná-lo para armazenamento privado do
 
 ## Registrar no Claude Code
 
-Em terminal privado, sem tracing, carregar token apenas em variável de shell não exportada:
+Caminho recomendado: `headersHelper` gera headers JSON a cada conexão/reconexão, sem persistir bearer na configuração. Suporte HTTP e contrato documentados em https://code.claude.com/docs/en/mcp#use-dynamic-headers-for-custom-authentication. O helper tem limite de 10 segundos; conexão lenta pode expirar antes do timeout de 30 segundos do script de token.
+
+Crie fora do repositório um helper privado executável (modo 0700), com caminhos absolutos ajustados à instalação:
+
+```sh
+#!/usr/bin/env bash
+set +x
+set -eu
+TOKEN="$(/caminho/absoluto/atlas-mcp-token.sh svc-atlas-mcp /caminho/privado/app-password)"
+printf '%s' "$TOKEN" | python3 -c 'import json,sys; print(json.dumps({"Authorization": "Bearer " + sys.stdin.read()}))'
+unset TOKEN
+```
+
+O app password deve continuar em arquivo regular próprio modo 0600. O bearer passa por stdin ao serializador, não por argv. Não execute o helper manualmente em terminal gravado: stdout contém credencial.
+
+Na configuração MCP privada do Claude Code, adicione:
+
+```json
+{
+  "mcpServers": {
+    "atlas": {
+      "type": "http",
+      "url": "https://atlas.gf2.in/mcp",
+      "headersHelper": "/caminho/privado/atlas-mcp-headers.sh"
+    }
+  }
+}
+```
+
+Proteja configuração e helper contra alterações por outros usuários. Para configuração local/de projeto, aceite confiança apenas após revisar o comando; `headersHelper` executa shell. O cliente executa novamente o helper por conexão, sem cache, e tenta renovar uma vez após 401/403 de tool call. Solicite `list_problems`.
+
+### Alternativa: header estático
+
+Para clientes sem `headersHelper`, em terminal privado, sem tracing, carregar token apenas em variável de shell não exportada:
 
 ```sh
 TOKEN="$(./deploy/mcp/atlas-mcp-token.sh svc-atlas-mcp /caminho/privado/app-password)"

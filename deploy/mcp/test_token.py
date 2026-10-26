@@ -2,6 +2,9 @@
 import contextlib
 import io
 import json
+import threading
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from unittest.mock import patch
 import pathlib
 import subprocess
@@ -45,6 +48,67 @@ class TokenTest(unittest.TestCase):
                  self.assertRaises(SystemExit):
                 exec(compile(payload, str(SCRIPT), 'exec'), {})
             self.assertEqual(output.getvalue(), '')
+            self.assertNotIn('fake-password', errors.getvalue())
+
+    def test_redirect_307_never_reaches_second_server(self):
+        payload = SCRIPT.read_text().split("<<'PY'\n", 1)[1].rsplit('\nPY', 1)[0]
+        received = []
+
+        class Destination(BaseHTTPRequestHandler):
+            def do_GET(self):
+                received.append(self.path)
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b'{"access_token":"redirected-token"}')
+
+            def log_message(self, *args):
+                pass
+
+        with contextlib.ExitStack() as stack:
+            destination = ThreadingHTTPServer(('127.0.0.1', 0), Destination)
+            stack.callback(destination.server_close)
+
+            class Redirect(Destination):
+                def do_GET(self):
+                    self.send_response(307)
+                    self.send_header('Location', f'http://127.0.0.1:{destination.server_port}/stolen')
+                    self.end_headers()
+
+            origin = ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+            stack.callback(origin.server_close)
+            for server in (destination, origin):
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                stack.callback(thread.join)
+                stack.callback(server.shutdown)
+            secret = stack.enter_context(tempfile.NamedTemporaryFile(mode='w'))
+            secret.write('fake-password')
+            secret.flush()
+            real_request = urllib.request.Request
+
+            def local_request(url, *args, **kwargs):
+                # Só a URL fixa do Authentik vira servidor local; Request criado
+                # pelo urllib ao seguir redirect precisa passar intacto.
+                if url != 'https://auth.gf2.in/application/o/token/':
+                    return real_request(url, *args, **kwargs)
+                # urllib já recusa POST+307 em super(). GET isola nossa NoRedirect
+                # em vez de depender dessa salvaguarda.
+                return real_request(f'http://127.0.0.1:{origin.server_port}/token',
+                                    *args, method='GET', **kwargs)
+
+            output, errors = io.StringIO(), io.StringIO()
+            exit_code = 0
+            with patch('sys.argv', ['-', 'svc-atlas-mcp', secret.name]), \
+                 patch('urllib.request.Request', side_effect=local_request), \
+                 contextlib.redirect_stdout(output), contextlib.redirect_stderr(errors):
+                try:
+                    exec(compile(payload, str(SCRIPT), 'exec'), {})
+                except SystemExit as error:
+                    exit_code = error.code
+            self.assertEqual(received, [], 'redirect destination must receive ZERO requests')
+            self.assertNotEqual(exit_code, 0)
+            self.assertEqual(output.getvalue(), '')
+            self.assertIn('Falha ao obter token', errors.getvalue())
             self.assertNotIn('fake-password', errors.getvalue())
 
     def test_insecure_file_rejected(self):
