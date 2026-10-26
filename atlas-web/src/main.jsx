@@ -4,13 +4,16 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import Embed from './Embed.jsx'
-import { parseEmbedParams, shouldRenderEmbed } from './lib/embed.js'
+import LoginPopup from './LoginPopup.jsx'
+import { isLoginPopupPath, parseEmbedParams, shouldRenderEmbed } from './lib/embed.js'
 
 const embed = shouldRenderEmbed(window)
+// o popup de login do /embed e top-level; enquadrado, vale a regra de sempre (so o Embed)
+const loginPopup = !embed && isLoginPopupPath(window.location.pathname)
 const params = parseEmbedParams(window.location.search)
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {embed ? <Embed {...params} /> : <App focus={params.focus} />}
+    {embed ? <Embed {...params} /> : loginPopup ? <LoginPopup /> : <App focus={params.focus} />}
   </React.StrictMode>,
 )
