@@ -1,6 +1,9 @@
 package io.github.ggfto.atlas.hub;
 
 import static org.junit.jupiter.api.Assertions.*;
+import com.github.dockerjava.api.model.ExposedPort;
+import com.github.dockerjava.api.model.PortBinding;
+import com.github.dockerjava.api.model.Ports;
 import io.github.ggfto.atlas.core.Node;
 import io.github.ggfto.atlas.core.NodeKind;
 import io.github.ggfto.atlas.core.NodeStatus;
@@ -17,6 +20,7 @@ import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 import io.vertx.mqtt.MqttClient;
 import io.vertx.mqtt.messages.MqttPublishMessage;
+import java.net.ServerSocket;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -131,6 +135,50 @@ class HaMqttBrokerTest {
     }
 
     @Test
+    void brokerRestartWithoutPersistenceGetsDiscoveryAndOnlineAgain() throws Exception {
+        int port;
+        try (var free = new ServerSocket(0)) {
+            port = free.getLocalPort();
+        }
+        var stream = new DrivenStream(List.of(HaDiscoveryTest.node(NodeKind.ROUTE, "initial")));
+        var messages = HaDiscovery.messages(stream.nodes.get().getFirst());
+        var discovery = messages.stream().filter(m -> m.topic().endsWith("/config")).findFirst().orElseThrow();
+        var state = messages.stream().filter(m -> m.topic().endsWith("/state")).findFirst().orElseThrow();
+        Vertx vertx = Vertx.vertx();
+        var publisher = new HaMqttPublisher(vertx, stream, config("publisher-e", "60s", port));
+        var first = brokerOn(port);
+        first.start();
+        try {
+            var status = subscribe(vertx, port, "atlas/status");
+            publisher.start(null);
+            awaitLive(status, "atlas/status", "online");
+            // Home Assistant's broker restarting without persistence: every retained message is gone.
+            first.stop();
+            try (var second = brokerOn(port)) {
+                second.start();
+                awaitLive(subscribe(vertx, port, "atlas/status"), "atlas/status", "online");
+                var fresh = subscribe(vertx, port, "#");
+                assertTrue(await(fresh, discovery.topic(), discovery.payload()).isRetain(),
+                        "Reconnected publisher must republish retained discovery");
+                assertTrue(await(fresh, state.topic(), state.payload()).isRetain());
+            }
+        } finally {
+            publisher.stop();
+            first.stop();
+            vertx.close().toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        }
+    }
+
+    /** Mosquitto without persistence on a fixed host port, so a second one replaces the first at the same address. */
+    private static GenericContainer<?> brokerOn(int port) {
+        return new GenericContainer<>(DockerImageName.parse("eclipse-mosquitto:2"))
+                .withExposedPorts(1883).withCommand("mosquitto", "-c", "/test.conf")
+                .withCopyToContainer(Transferable.of("listener 1883\nallow_anonymous true\npersistence false\n"), "/test.conf")
+                .withCreateContainerCmdModifier(cmd -> cmd.getHostConfig().withPortBindings(
+                        new PortBinding(Ports.Binding.bindPort(port), new ExposedPort(1883))));
+    }
+
+    @Test
     void crashedHubLeavesRetainedWillOffline() throws Exception {
         var stream = new DrivenStream(List.of(HaDiscoveryTest.node(NodeKind.ROUTE, "initial")));
         Vertx hub = Vertx.vertx();
@@ -217,25 +265,37 @@ class HaMqttBrokerTest {
     }
 
     static HaMqttConfig config(String clientId, String grace) {
-        return settings(clientId, grace).getConfigMapping(HaMqttConfig.class);
+        return config(clientId, grace, broker.getMappedPort(1883));
+    }
+
+    static HaMqttConfig config(String clientId, String grace, int port) {
+        return settings(clientId, grace, port).getConfigMapping(HaMqttConfig.class);
     }
 
     private static SmallRyeConfig settings(String clientId, String grace) {
+        return settings(clientId, grace, broker.getMappedPort(1883));
+    }
+
+    private static SmallRyeConfig settings(String clientId, String grace, int port) {
         return new SmallRyeConfigBuilder()
                 .withConverter(Duration.class, 100, new DurationConverter())
                 .withMapping(AtlasConfig.class).withMapping(HaMqttConfig.class)
                 .withDefaultValue("atlas.ha-mqtt.enabled", "true")
                 .withDefaultValue("atlas.ha-mqtt.host", broker.getHost())
-                .withDefaultValue("atlas.ha-mqtt.port", broker.getMappedPort(1883).toString())
+                .withDefaultValue("atlas.ha-mqtt.port", String.valueOf(port))
                 .withDefaultValue("atlas.ha-mqtt.client-id", clientId)
                 .withDefaultValue("atlas.ha-mqtt.removal-grace", grace).build();
     }
 
     private static LinkedBlockingQueue<MqttPublishMessage> subscribe(Vertx vertx, String topic) throws Exception {
+        return subscribe(vertx, broker.getMappedPort(1883), topic);
+    }
+
+    private static LinkedBlockingQueue<MqttPublishMessage> subscribe(Vertx vertx, int port, String topic) throws Exception {
         var received = new LinkedBlockingQueue<MqttPublishMessage>();
         var client = MqttClient.create(vertx);
         client.publishHandler(received::add);
-        client.connect(broker.getMappedPort(1883), broker.getHost()).toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
+        client.connect(port, broker.getHost()).toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
         client.subscribe(topic, 1).toCompletionStage().toCompletableFuture().get(10, TimeUnit.SECONDS);
         return received;
     }
