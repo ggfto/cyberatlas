@@ -50,6 +50,19 @@ class McpTest {
                 .body("result.tools.annotations.destructiveHint", everyItem(is(false)));
     }
 
+    /** Bearer sem cookie/sessão: profile.groups da conta de serviço vira VIEWER. */
+    @Test
+    void serviceAccountListsProblemsWithoutSession() {
+        Mcp.open(Tokens.viewer()).call("list_problems", "{}").then().statusCode(200)
+                .body("result.isError", is(false))
+                .body("result.structuredContent.unknown", notNullValue());
+        // Mutação do claim: remover grupo impede até tools/call, sem sessão fallback.
+        Mcp.spec(Tokens.noGroup(), null)
+                .body("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\","
+                        + "\"params\":{\"name\":\"list_problems\",\"arguments\":{}}}")
+                .when().post("/mcp").then().statusCode(403);
+    }
+
     @Test
     void adminAlsoGetsIn() {
         Mcp.open(Tokens.admin()).tools().then().statusCode(200).body("result.tools.name", hasItem("list_problems"));
