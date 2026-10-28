@@ -43,6 +43,8 @@ public class EdgePkiProfile implements QuarkusTestProfile {
             c.put("atlas.edges.port", String.valueOf(EDGE_PORT));
             c.put("atlas.edges.admin-enabled", "true");
             c.put("atlas.logs.enabled", "true");
+            // abertura e primeiro frame de cada sessao no log do CI (diagnostico do Hello perdido)
+            c.put("quarkus.log.category.\"io.github.ggfto.atlas.hub.edge.EdgeSocket\".level", "DEBUG");
             return c;
         } catch (Exception e) {
             throw new IllegalStateException("PKI de teste", e);
