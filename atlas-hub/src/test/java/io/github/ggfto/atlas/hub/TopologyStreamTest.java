@@ -108,6 +108,123 @@ public class TopologyStreamTest {
         assertTrue(!resumed.data().contains("\"route:ha.gf2.in\""), "retomada nao reenvia o mapa inteiro");
     }
 
+    /**
+     * Corrida vista na CI (snapshotThenPatchThenResume, "patch" is null): uma mudanca logo depois do inicial nao pode
+     * cair antes de o cliente estar inscrito no ao vivo. Aqui sem rede e sem sorte: a mudanca sai no mesmo callback
+     * que recebe o inicial, o ponto mais cedo possivel.
+     */
+    @Test
+    void changeRightAfterTheInitialIsNeverLost() throws Exception {
+        streams.refresh();
+        BlockingQueue<TopologyStream.Initial> got = new LinkedBlockingQueue<>();
+        var sub = streams.follow(null).subscribe().with(u -> {
+            boolean first = got.isEmpty();
+            got.add(u);
+            if (first) {
+                push("docker:vps/colado-no-inicial");
+            }
+        });
+        try {
+            TopologyStream.Initial first = got.poll(10, TimeUnit.SECONDS);
+            assertTrue(first instanceof TopologyStream.Initial.Snapshot, String.valueOf(first));
+            long v0 = ((TopologyStream.Initial.Snapshot) first).version();
+            TopologyStream.Initial next = got.poll(5, TimeUnit.SECONDS);
+            assertTrue(next instanceof TopologyStream.Initial.Patch, "patch perdido logo depois do inicial: " + next);
+            var patch = ((TopologyStream.Initial.Patch) next).patch();
+            assertEquals(v0, patch.base());
+            assertTrue(patch.upsertNodes().stream().anyMatch(n -> n.node().key().equals("docker:vps/colado-no-inicial")), patch.toString());
+        } finally {
+            sub.cancel();
+        }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicInteger WINDOW = new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * A corrida da CI, forcada: outra thread chama {@code refresh()} exatamente entre o inicial e a inscricao no ao
+     * vivo (gancho {@code afterInitial}). A mudanca entra depois do refresh do inicial, entao so pode chegar como
+     * patch. Com o lock do follow, a outra thread espera e o patch sai para o cliente ja inscrito; sem ele, o patch
+     * sai para ninguem.
+     */
+    @Test
+    void refreshFromAnotherThreadBetweenTheInitialAndTheSubscriptionIsNeverLost() throws Exception {
+        streams.refresh();
+        String key = "docker:vps/na-janela-" + WINDOW.incrementAndGet();
+        TopologyStream real = io.quarkus.arc.ClientProxy.unwrap(streams);
+        Thread[] other = new Thread[1];
+        real.afterInitial = () -> {
+            topology.accept(new Fragment("edge:vps/docker-janela", Instant.now(), Duration.ofSeconds(90),
+                    List.of(new Node(key, NodeKind.CONTAINER, key, "vps", Map.of())), List.of(), List.of()));
+            other[0] = Thread.ofPlatform().start(real::refresh);
+            awaitBlockedOnCurrentThreadOrDone(other[0]);
+        };
+        BlockingQueue<TopologyStream.Initial> got = new LinkedBlockingQueue<>();
+        var sub = streams.follow(null).subscribe().with(got::add);
+        try {
+            TopologyStream.Initial first = got.poll(10, TimeUnit.SECONDS);
+            assertTrue(first instanceof TopologyStream.Initial.Snapshot, String.valueOf(first));
+            long v0 = ((TopologyStream.Initial.Snapshot) first).version();
+            TopologyStream.Initial next = got.poll(5, TimeUnit.SECONDS);
+            assertTrue(next instanceof TopologyStream.Initial.Patch, "patch publicado na janela se perdeu: " + next);
+            var patch = ((TopologyStream.Initial.Patch) next).patch();
+            assertEquals(v0, patch.base());
+            assertTrue(patch.upsertNodes().stream().anyMatch(n -> n.node().key().equals(key)), patch.toString());
+        } finally {
+            real.afterInitial = () -> {
+            };
+            sub.cancel();
+            other[0].join(5000);
+        }
+    }
+
+    /**
+     * SSE fechado (cancelamento do follow) tira a inscricao dele do ao vivo. O concat antigo cancelava sozinho; no
+     * follow, o onTermination do emitter e o unico caminho, e sem ele cada cliente que sai deixa um assinante vivo
+     * no BroadcastProcessor. A inscricao deste follow e achada por identidade, entao outros streams abertos nao
+     * atrapalham.
+     */
+    @Test
+    void cancelledFollowLeavesNoSubscriberOnTheLiveStream() throws Exception {
+        streams.refresh();
+        List<?> before = liveSubscribers();
+        BlockingQueue<TopologyStream.Initial> got = new LinkedBlockingQueue<>();
+        var sub = streams.follow(null).subscribe().with(got::add);
+        assertTrue(got.poll(10, TimeUnit.SECONDS) instanceof TopologyStream.Initial.Snapshot);
+        List<Object> mine = new ArrayList<>(liveSubscribers());
+        mine.removeIf(s -> before.stream().anyMatch(b -> b == s));
+        assertEquals(1, mine.size(), "follow devia ter exatamente 1 inscricao no ao vivo");
+        sub.cancel();
+        assertTrue(liveSubscribers().stream().noneMatch(s -> s == mine.get(0)), "follow cancelado deixou a inscricao viva no ao vivo");
+        push("docker:vps/depois-do-cancel");
+        assertEquals(null, got.poll(500, TimeUnit.MILLISECONDS), "follow cancelado ainda recebeu patch");
+    }
+
+    /** Assinantes atuais do BroadcastProcessor do ao vivo (campo interno do Mutiny; se mudar de nome, o teste quebra alto). */
+    private List<?> liveSubscribers() throws Exception {
+        Object processor = streams.live();
+        java.lang.reflect.Field f = processor.getClass().getDeclaredField("subscribers");
+        f.setAccessible(true);
+        return List.copyOf((List<?>) ((java.util.concurrent.atomic.AtomicReference<?>) f.get(processor)).get());
+    }
+
+    /** Volta quando a thread terminou ou esta bloqueada no monitor que a thread atual segura. */
+    private static void awaitBlockedOnCurrentThreadOrDone(Thread t) {
+        var mx = java.lang.management.ManagementFactory.getThreadMXBean();
+        long me = Thread.currentThread().threadId();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            if (t.getState() == Thread.State.TERMINATED) {
+                return;
+            }
+            var info = mx.getThreadInfo(t.threadId());
+            if (info != null && info.getThreadState() == Thread.State.BLOCKED && info.getLockOwnerId() == me) {
+                return;
+            }
+            Thread.onSpinWait();
+        }
+        throw new AssertionError("a outra thread nem terminou nem esperou o lock");
+    }
+
     @Test
     void unknownOrTooOldIdGetsAFreshSnapshot() throws Exception {
         streams.refresh();

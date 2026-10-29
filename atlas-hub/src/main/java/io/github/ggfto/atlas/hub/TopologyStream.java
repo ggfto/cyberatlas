@@ -6,6 +6,7 @@ import io.github.ggfto.atlas.core.TopologyPatch;
 import io.quarkus.scheduler.Scheduled;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.operators.multi.processors.BroadcastProcessor;
+import io.smallrye.mutiny.subscription.Cancellable;
 import jakarta.enterprise.context.ApplicationScoped;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -36,6 +37,10 @@ public class TopologyStream {
     private final Map<Long, Topology> ring = new LinkedHashMap<>();
     private long version;
     private Topology current;
+
+    /** So para teste: roda no {@link #follow(String)} entre o inicial e a inscricao no ao vivo, o ponto da corrida. */
+    volatile Runnable afterInitial = () -> {
+    };
 
     TopologyStream(TopologyService topology, AtlasConfig config) {
         this.topology = topology;
@@ -78,6 +83,27 @@ public class TopologyStream {
             return new Initial.Patch(TopologyDiff.between(base, current, last, version));
         }
         return new Initial.Snapshot(version, current);
+    }
+
+    /**
+     * O inicial (nada, se o cliente ja esta em dia) e depois cada patch ao vivo, sem buraco entre os dois. O inicial,
+     * a inscricao no ao vivo e a emissao do inicial acontecem sob o mesmo lock do {@link #refresh()}, que e quem emite
+     * os patches: nenhum patch posterior ao inicial sai antes de o cliente estar inscrito. Montar
+     * {@code concat(inicial, live())} fora daqui perde o patch que cair entre o inicial ir para o fio e a inscricao
+     * (corrida vista na CI).
+     */
+    public Multi<Initial> follow(String lastEventId) {
+        return Multi.createFrom().emitter(em -> {
+            synchronized (this) {
+                Initial first = initial(lastEventId);
+                afterInitial.run();
+                Cancellable patches = live.subscribe().with(p -> em.emit(new Initial.Patch(p)));
+                em.onTermination(patches::cancel);
+                if (!(first instanceof Initial.UpToDate)) {
+                    em.emit(first);
+                }
+            }
+        });
     }
 
     public Multi<TopologyPatch> live() {
