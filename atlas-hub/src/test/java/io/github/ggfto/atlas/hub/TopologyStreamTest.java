@@ -177,6 +177,36 @@ public class TopologyStreamTest {
         }
     }
 
+    /**
+     * SSE fechado (cancelamento do follow) tira a inscricao dele do ao vivo. O concat antigo cancelava sozinho; no
+     * follow, o onTermination do emitter e o unico caminho, e sem ele cada cliente que sai deixa um assinante vivo
+     * no BroadcastProcessor. A inscricao deste follow e achada por identidade, entao outros streams abertos nao
+     * atrapalham.
+     */
+    @Test
+    void cancelledFollowLeavesNoSubscriberOnTheLiveStream() throws Exception {
+        streams.refresh();
+        List<?> before = liveSubscribers();
+        BlockingQueue<TopologyStream.Initial> got = new LinkedBlockingQueue<>();
+        var sub = streams.follow(null).subscribe().with(got::add);
+        assertTrue(got.poll(10, TimeUnit.SECONDS) instanceof TopologyStream.Initial.Snapshot);
+        List<Object> mine = new ArrayList<>(liveSubscribers());
+        mine.removeIf(s -> before.stream().anyMatch(b -> b == s));
+        assertEquals(1, mine.size(), "follow devia ter exatamente 1 inscricao no ao vivo");
+        sub.cancel();
+        assertTrue(liveSubscribers().stream().noneMatch(s -> s == mine.get(0)), "follow cancelado deixou a inscricao viva no ao vivo");
+        push("docker:vps/depois-do-cancel");
+        assertEquals(null, got.poll(500, TimeUnit.MILLISECONDS), "follow cancelado ainda recebeu patch");
+    }
+
+    /** Assinantes atuais do BroadcastProcessor do ao vivo (campo interno do Mutiny; se mudar de nome, o teste quebra alto). */
+    private List<?> liveSubscribers() throws Exception {
+        Object processor = streams.live();
+        java.lang.reflect.Field f = processor.getClass().getDeclaredField("subscribers");
+        f.setAccessible(true);
+        return List.copyOf((List<?>) ((java.util.concurrent.atomic.AtomicReference<?>) f.get(processor)).get());
+    }
+
     /** Volta quando a thread terminou ou esta bloqueada no monitor que a thread atual segura. */
     private static void awaitBlockedOnCurrentThreadOrDone(Thread t) {
         var mx = java.lang.management.ManagementFactory.getThreadMXBean();
