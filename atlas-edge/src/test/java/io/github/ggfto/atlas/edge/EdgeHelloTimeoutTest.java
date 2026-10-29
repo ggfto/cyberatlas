@@ -81,6 +81,7 @@ class EdgeHelloTimeoutTest {
         static volatile long firstOpen;
         static volatile long secondOpen;
         private Vertx vertx;
+        private Path state;
 
         @Override
         public Map<String, String> start() {
@@ -93,7 +94,7 @@ class EdgeHelloTimeoutTest {
                 X509Certificate caCert = issue("CN=atlas-test-ca", ca.getPublic(), "CN=atlas-test-ca", ca.getPrivate(), true, null);
                 X509Certificate serverCert = issue("CN=localhost", server.getPublic(), "CN=atlas-test-ca", ca.getPrivate(), false, "localhost");
                 X509Certificate edgeCert = issue("CN=edge-lab", edge.getPublic(), "CN=atlas-test-ca", ca.getPrivate(), false, null);
-                Path state = Files.createTempDirectory("atlas-edge-hello");
+                state = Files.createTempDirectory("atlas-edge-hello");
                 new CredentialStore(state).save(new EdgeCredentials(Pem.privateKey(edge.getPrivate()), Pem.certificate(edgeCert),
                         Pem.certificate(caCert)));
 
@@ -128,8 +129,24 @@ class EdgeHelloTimeoutTest {
 
         @Override
         public void stop() {
-            if (vertx != null) {
-                vertx.close().toCompletionStage().toCompletableFuture().join();
+            // o Quarkus chama o stop() tambem quando o teste falha: a pasta com a chave de teste do edge nao fica no /tmp
+            try {
+                if (vertx != null) {
+                    vertx.close().toCompletionStage().toCompletableFuture().join();
+                }
+            } finally {
+                deleteTree(state);
+            }
+        }
+
+        static void deleteTree(Path dir) {
+            if (dir == null || !Files.exists(dir)) {
+                return;
+            }
+            try (var all = Files.walk(dir)) {
+                all.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+            } catch (java.io.IOException e) {
+                throw new java.io.UncheckedIOException(e);
             }
         }
 

@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * deploy/pki/gen-pki.sh (F6): o que o script gera e o que o hub carrega no deploy. A CA assina edge; o cert de
@@ -35,9 +36,9 @@ class PkiScriptTest {
     }
 
     @Test
-    void hubLoadsTheCaAndTheServerCertChainsToIt() throws Exception {
+    void hubLoadsTheCaAndTheServerCertChainsToIt(@TempDir Path tmp) throws Exception {
         assumeTrue(Files.isExecutable(Path.of("/usr/bin/openssl")) || Files.isExecutable(Path.of("/bin/openssl")), "sem openssl");
-        Path out = Files.createTempDirectory("pki").resolve("atlas");
+        Path out = tmp.resolve("atlas");
         Process p = run(out, "DNS:atlas.atlas.svc", "IP:10.99.0.1", "IP:172.17.0.1");
         String log = new String(p.getInputStream().readAllBytes());
         assertEquals(0, p.exitValue(), log);
@@ -68,9 +69,9 @@ class PkiScriptTest {
     }
 
     @Test
-    void refusesToOverwriteAnExistingPki() throws Exception {
+    void refusesToOverwriteAnExistingPki(@TempDir Path tmp) throws Exception {
         assumeTrue(Files.isExecutable(Path.of("/usr/bin/openssl")) || Files.isExecutable(Path.of("/bin/openssl")), "sem openssl");
-        Path out = Files.createTempDirectory("pki").resolve("atlas");
+        Path out = tmp.resolve("atlas");
         assertEquals(0, run(out, "IP:10.99.0.1").exitValue());
         String before = Files.readString(out.resolve("ca.key"));
         assertNotEquals(0, run(out, "IP:10.99.0.1").exitValue());
@@ -78,9 +79,9 @@ class PkiScriptTest {
     }
 
     @Test
-    void needsAtLeastOneName() throws Exception {
+    void needsAtLeastOneName(@TempDir Path tmp) throws Exception {
         assumeTrue(Files.isExecutable(Path.of("/usr/bin/openssl")) || Files.isExecutable(Path.of("/bin/openssl")), "sem openssl");
-        Path out = Files.createTempDirectory("pki").resolve("atlas");
+        Path out = tmp.resolve("atlas");
         assertNotEquals(0, run(out).exitValue());
         assertTrue(!Files.exists(out.resolve("ca.key")));
     }
