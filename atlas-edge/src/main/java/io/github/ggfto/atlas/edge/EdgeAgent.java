@@ -78,7 +78,7 @@ public class EdgeAgent {
                     () -> new Frame.Hello(edgeId, ProtocolVersion.CURRENT, config.machine().get(),
                             sources.stream().map(TopologySource::name).toList(), Map.of()),
                     new Backoff(Duration.ofSeconds(1), Duration.ofMinutes(2), Math::random), Duration.ofSeconds(20),
-                    Duration.ofHours(1), new EdgeLink.Handler() {
+                    Duration.ofHours(1), config.helloTimeout(), new EdgeLink.Handler() {
                         public void onWelcome(Frame.Welcome w) {
                             checks = w.checks().stream().map(EdgeAgent::target).toList();
                             ttl = Duration.ofMillis(w.ttlMs());

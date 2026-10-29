@@ -58,6 +58,12 @@ class EdgeEndToEndTest {
         return EnrollmentClient.enroll(EDGE, newEdge(machine), EdgePkiProfile.caPem(), Duration.ofSeconds(5));
     }
 
+    /**
+     * Prazo do Hello nos testes: um Hello perdido reconecta em 2 s + 200 ms de backoff e a resposta da segunda
+     * tentativa chega bem antes do poll de 10 s (o hub responde em menos de 1 s, medido sob carga).
+     */
+    static final Duration HELLO_TIMEOUT = Duration.ofSeconds(2);
+
     record Session(EdgeLink link, BlockingQueue<Frame> frames) {
     }
 
@@ -65,7 +71,7 @@ class EdgeEndToEndTest {
         BlockingQueue<Frame> frames = new LinkedBlockingQueue<>();
         EdgeLink link = new EdgeLink(WS, ssl, () -> new Frame.Hello(edgeId, version, machine, List.of("docker"), Map.of()),
                 new Backoff(Duration.ofMillis(200), Duration.ofSeconds(1), () -> 0.0), Duration.ofSeconds(5), Duration.ofHours(1),
-                new EdgeLink.Handler() {
+                HELLO_TIMEOUT, new EdgeLink.Handler() {
                     public void onWelcome(Frame.Welcome w) {
                         frames.add(w);
                     }

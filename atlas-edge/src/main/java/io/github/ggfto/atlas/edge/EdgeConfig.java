@@ -49,4 +49,12 @@ public interface EdgeConfig {
 
     @WithDefault("10s")
     Duration timeout();
+
+    /**
+     * Prazo para o hub responder ao Hello (Welcome ou Reject); sem resposta, o edge derruba e reconecta com o backoff
+     * em vez de ficar numa sessao muda. O hub responde na hora (ate 0,7 s medido sob carga); 15 s cobrem um link lento
+     * e ficam bem abaixo do watchdog de 3 heartbeats (60 s), que so vale depois do Welcome.
+     */
+    @WithDefault("15s")
+    Duration helloTimeout();
 }

@@ -19,6 +19,7 @@ import org.jboss.logging.Logger;
  * A conexao do edge com o hub (design §1.1, molde do WebSocketFrameChannel do hive-agent): um WebSocket de saida
  * com mTLS, {@code Hello} ao abrir, heartbeat, reconexao com backoff e jitter. Um {@code Reject} nao vira loop
  * rapido: a proxima tentativa so depois de {@code rejectDelay}. Sem resposta por 3 heartbeats, derruba e reconecta.
+ * Antes do Welcome o watchdog nao roda: um Hello sem Welcome nem Reject em {@code helloTimeout} derruba e reconecta.
  */
 public final class EdgeLink implements AutoCloseable {
 
@@ -54,6 +55,7 @@ public final class EdgeLink implements AutoCloseable {
     private final Backoff backoff;
     private final Duration heartbeat;
     private final Duration rejectDelay;
+    private final Duration helloTimeout;
     private final Handler handler;
     private final ScheduledExecutorService timer = Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
     private final AtomicInteger attempt = new AtomicInteger();
@@ -64,13 +66,14 @@ public final class EdgeLink implements AutoCloseable {
     private volatile boolean closed;
 
     public EdgeLink(URI uri, SSLContext ssl, Supplier<Frame.Hello> hello, Backoff backoff, Duration heartbeat,
-                    Duration rejectDelay, Handler handler) {
+                    Duration rejectDelay, Duration helloTimeout, Handler handler) {
         this.uri = uri;
         this.ssl = ssl;
         this.hello = hello;
         this.backoff = backoff;
         this.heartbeat = heartbeat;
         this.rejectDelay = rejectDelay;
+        this.helloTimeout = helloTimeout;
         this.handler = handler;
     }
 
@@ -93,7 +96,12 @@ public final class EdgeLink implements AutoCloseable {
             w.sendText(FrameCodec.encode(frame), true).get(10, TimeUnit.SECONDS);
             return true;
         } catch (Exception e) {
-            LOG.debugf("envio de %s falhou: %s", frame.getClass().getSimpleName(), e.getMessage());
+            if (frame instanceof Frame.Hello) {
+                // o Hello perdido e o que deixa a sessao muda; WARN para o lado do edge aparecer no log
+                LOG.warnf("envio de Hello falhou: %s", e.toString());
+            } else {
+                LOG.debugf("envio de %s falhou: %s", frame.getClass().getSimpleName(), e.getMessage());
+            }
             drop();
             return false;
         }
@@ -114,6 +122,9 @@ public final class EdgeLink implements AutoCloseable {
                     }
                     ws = w;
                     lastSeen = Instant.now();
+                    if (!closed) {
+                        timer.schedule(() -> helloUnanswered(w), helloTimeout.toMillis(), TimeUnit.MILLISECONDS);
+                    }
                     send(hello.get());
                 });
     }
@@ -128,6 +139,14 @@ public final class EdgeLink implements AutoCloseable {
             return;
         }
         send(new Frame.Heartbeat(System.currentTimeMillis()));
+    }
+
+    /** Sessao que nao recebeu Welcome nem Reject no prazo: nao serve, derruba e reconecta com o backoff. */
+    private void helloUnanswered(WebSocket w) {
+        if (ws == w && sessionId == null) {
+            LOG.warnf("hub nao respondeu ao Hello em %d ms; reconectando", helloTimeout.toMillis());
+            drop();
+        }
     }
 
     private void drop() {

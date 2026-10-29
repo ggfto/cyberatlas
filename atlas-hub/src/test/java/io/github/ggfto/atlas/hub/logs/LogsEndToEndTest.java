@@ -58,7 +58,7 @@ class LogsEndToEndTest {
         EdgeLink connect(EdgeCredentials creds, String machine) throws Exception {
             EdgeLink l = new EdgeLink(WS, creds.sslContext(), () -> new Frame.Hello("edge-" + machine, ProtocolVersion.CURRENT, machine,
                     List.of("docker"), Map.of()), new Backoff(Duration.ofMillis(200), Duration.ofSeconds(1), () -> 0.0),
-                    Duration.ofSeconds(5), Duration.ofHours(1), new EdgeLink.Handler() {
+                    Duration.ofSeconds(5), Duration.ofHours(1), Duration.ofSeconds(2), new EdgeLink.Handler() {
                         public void onWelcome(Frame.Welcome w) {
                             welcome.add(w);
                         }

@@ -47,6 +47,7 @@ public class EdgeSocket {
 
     @OnOpen
     void open(WebSocketConnection c) {
+        LOG.debugf("edge %s sessao %s aberta", c.userData().get(EDGE_ID), c.id());
         hub.registry().open(c.userData().get(EDGE_ID), c.id());
     }
 
@@ -63,6 +64,8 @@ public class EdgeSocket {
         }
         boolean greeted = Boolean.TRUE.equals(c.userData().get(GREETED));
         if (!greeted) {
+            // com o log de abertura, mostra se um Hello perdido chegou ao hub
+            LOG.debugf("edge %s sessao %s: primeiro frame %s", edgeId, c.id(), frame.getClass().getSimpleName());
             if (!(frame instanceof Frame.Hello h)) {
                 reject(c, "o primeiro frame tem de ser hello");
                 return;
