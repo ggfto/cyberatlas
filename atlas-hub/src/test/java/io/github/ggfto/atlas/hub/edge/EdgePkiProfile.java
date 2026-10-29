@@ -25,6 +25,7 @@ public class EdgePkiProfile implements QuarkusTestProfile {
     public Map<String, String> getConfigOverrides() {
         try {
             dir = Files.createTempDirectory("atlas-edge-pki");
+            deleteOnExit(dir);
             AtlasCa ca = AtlasCa.generate("atlas-test-ca", Duration.ofDays(1));
             KeyPair server = Csr.newKeyPair();
             Files.writeString(dir.resolve("ca.crt"), ca.certificatePem());
@@ -49,6 +50,21 @@ public class EdgePkiProfile implements QuarkusTestProfile {
         } catch (Exception e) {
             throw new IllegalStateException("PKI de teste", e);
         }
+    }
+
+    /**
+     * O perfil nao tem stop() e o Quarkus pode chamar o getConfigOverrides() varias vezes (uma pasta por chamada; os
+     * testes leem a da vez pelo campo estatico): cada pasta, que guarda a chave da CA de teste, sai no fim da JVM do
+     * surefire, passe ou falhe o teste.
+     */
+    private static void deleteOnExit(Path pki) {
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try (var all = Files.walk(pki)) {
+                all.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+            } catch (java.io.IOException e) {
+                // a JVM esta saindo: o que nao der para apagar fica, sem derrubar o shutdown
+            }
+        }));
     }
 
     static String caPem() throws java.io.IOException {
