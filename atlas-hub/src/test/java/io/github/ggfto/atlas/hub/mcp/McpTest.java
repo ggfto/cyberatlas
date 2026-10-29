@@ -37,6 +37,28 @@ class McpTest {
                 .header("Location", nullValue());
     }
 
+    /**
+     * A falha de seguranca no /mcp sai no formato JSON-RPC, mas com mensagem neutra: nem nome de classe Java nem a
+     * mensagem interna da excecao (a do break-glass diz onde fica o login local). Status, desafio e ausencia de
+     * Location continuam os mesmos.
+     */
+    @Test
+    void securityFailureDoesNotExposeTheException() {
+        String[][] cases = {{null, "401"}, {"Bearer lixo", "401"}, {"Basic eDp5", "401"}, {"Bearer " + Tokens.noGroup(), "403"}};
+        for (String[] c : cases) {
+            var req = given().redirects().follow(false).accept(Mcp.ACCEPT).contentType(ContentType.JSON).body(Mcp.INIT);
+            if (c[0] != null) {
+                req.header("Authorization", c[0]);
+            }
+            var r = req.when().post("/mcp").then().statusCode(Integer.parseInt(c[1])).header("Location", nullValue())
+                    .body("jsonrpc", is("2.0")).body("id", is(1)).body("error.code", is(-32005))
+                    .body("error.message", is(c[1].equals("401") ? "Unauthorized" : "Forbidden"));
+            if (c[1].equals("401")) {
+                r.header("WWW-Authenticate", org.hamcrest.Matchers.equalToIgnoringCase("Bearer"));
+            }
+        }
+    }
+
     @Test
     void tokenWithoutAtlasGroupIs403() {
         Mcp.spec(Tokens.noGroup(), null).body(Mcp.INIT).when().post("/mcp").then().statusCode(403);
