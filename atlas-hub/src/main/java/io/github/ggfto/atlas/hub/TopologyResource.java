@@ -59,15 +59,13 @@ public class TopologyResource {
     @Path("/stream")
     @Produces(MediaType.SERVER_SENT_EVENTS)
     public Multi<OutboundSseEvent> stream(@HeaderParam("Last-Event-ID") String lastEventId, @Context Sse sse) {
-        TopologyStream.Initial first = stream.initial(lastEventId);
-        Multi<OutboundSseEvent> head = switch (first) {
-            case TopologyStream.Initial.Snapshot s -> Multi.createFrom().item(event(sse, "snapshot", s.version(), s.topology()));
-            case TopologyStream.Initial.Patch p -> Multi.createFrom().item(event(sse, "patch", p.patch().version(), p.patch()));
-            case TopologyStream.Initial.UpToDate u -> Multi.createFrom().empty();
-        };
-        Multi<OutboundSseEvent> patches = stream.live().map(p -> event(sse, "patch", p.version(), p));
+        Multi<OutboundSseEvent> updates = stream.follow(lastEventId).map(u -> switch (u) {
+            case TopologyStream.Initial.Snapshot s -> event(sse, "snapshot", s.version(), s.topology());
+            case TopologyStream.Initial.Patch p -> event(sse, "patch", p.patch().version(), p.patch());
+            case TopologyStream.Initial.UpToDate d -> throw new IllegalStateException("follow nao emite UpToDate");
+        });
         Multi<OutboundSseEvent> pings = Multi.createFrom().ticks().every(HEARTBEAT).map(t -> sse.newEventBuilder().comment("ping").build());
-        Multi<OutboundSseEvent> body = Multi.createBy().concatenating().streams(head, Multi.createBy().merging().streams(patches, pings));
+        Multi<OutboundSseEvent> body = Multi.createBy().merging().streams(updates, pings);
         Duration left = untilExpiry(identity, Instant.now());
         if (left == null) {
             return body; // identidade sem exp (break-glass): o stream vive ate o cliente sair
